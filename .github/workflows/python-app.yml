@@ -30,7 +30,7 @@ jobs:
         pytest
     - name: Lint with flake8
       run: |
-        flake8 . --count --max-line-length=100 --statistics
+        flake8 . --count --statistics --max-line-length=88 --select=B,C,E,F,W,T4,B9 --ignore=E203,E266,E501,W503 --max-complexity=18
     - name: Lint with pydocstyle
       run: |
         pydocstyle --match='(?!test_|__).*\.py' --convention='google'
