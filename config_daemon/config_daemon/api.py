@@ -1,7 +1,7 @@
 """API for the batch control daemon running on edge server nodes."""
 from fastapi import FastAPI
 
-import batch_control
+from config_daemon import batch_control
 
 app = FastAPI()
 

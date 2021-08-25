@@ -6,7 +6,7 @@ import requests
 from google.protobuf import text_format
 from pydantic import BaseModel
 
-import model_config_pb2
+from config_daemon import model_config_pb2
 
 # TODO validate MODEL_DIR
 MODEL_DIR = os.environ.get("MODEL_DIR")

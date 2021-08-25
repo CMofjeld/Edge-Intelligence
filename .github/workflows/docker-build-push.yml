@@ -5,7 +5,7 @@ on:
     branches:
       - 'main'
     paths:
-      - 'src/config_daemon/**'
+      - 'config_daemon/**'
 
 jobs:
   docker:
