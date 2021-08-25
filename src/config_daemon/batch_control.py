@@ -9,9 +9,9 @@ from pydantic import BaseModel
 import model_config_pb2
 
 # TODO validate MODEL_DIR
-MODEL_DIR = os.environ["MODEL_DIR"]
-TRITON_HOST = os.environ["TRITON_HOST"]
-TRITON_PORT = os.environ["TRITON_PORT"]
+MODEL_DIR = os.environ.get("MODEL_DIR")
+TRITON_HOST = os.environ.get("TRITON_HOST")
+TRITON_PORT = os.environ.get("TRITON_PORT")
 
 
 class ConfigUpdate(BaseModel):
