@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - 'main'
-    paths:
-      - 'config_daemon/**'
 
 jobs:
   docker:
@@ -27,10 +25,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       -
-        name: Build and push
+        name: Build and push config-daemon
         uses: docker/build-push-action@v2
         with:
           context: ./config_daemon
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/config-daemon:latest
+      -
+        name: Build and push inference-server
+        uses: docker/build-push-action@v2
+        with:
+          context: ./inference_server
+          platforms: linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/inference-server:latest
