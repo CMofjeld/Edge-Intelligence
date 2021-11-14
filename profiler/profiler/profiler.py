@@ -181,7 +181,7 @@ def main():
     print(f"Alpha: {alpha}, Beta: {beta}")
     if args.coeff_file:
         print(f"Writing coefficients to file {args.coeff_file}")
-        write_coefficients_to_file(alpha=alpha, beta=beta, coeff_file=args.coeff_file)
+        write_coefficients_to_file(alpha=alpha[0], beta=beta[0], coeff_file=args.coeff_file)
 
 
 if __name__ == "__main__":
