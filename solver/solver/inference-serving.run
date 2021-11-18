@@ -1,0 +1,7 @@
+reset;
+model /solver/inference-serving.mod;
+data /solver/inference-serving.dat;
+solve;
+display solve_result > /solver/solver-results.txt;
+display I >> /solver/solver-results.txt;
+display Reward >> /solver/solver-results.txt;
