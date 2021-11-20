@@ -64,3 +64,12 @@ class SolverParameters:
         str, Server
     ] = field(default_factory=dict)  # dictionary mapping server IDs to server parameters
     models: Dict[str, Model] = field(default_factory=dict)  # dictionary mapping model IDs to model parameters
+
+
+@dataclass
+class SessionMetrics:
+    """Set of metrics used to evaluate the quality of service for a request."""
+
+    accuracy: float = None # accuracy score of the assigned model
+    latency: float = None # expected E2E latency for the request
+    SOAI: float = None # speed of accurate inferences (accuracy / latency)
