@@ -84,7 +84,7 @@ def parse_solver_results(result_file_path: str) -> Dict[str, SessionConfiguratio
                     indicator = line_elements[-1]
                     if indicator == "1":
                         session_configurations[request_id] = SessionConfiguration(
-                            model_id=model_id, server_id=server_id
+                            model_id=model_id, server_id=server_id, request_id=request_id
                         )
     except Exception as e:
         print(e)

@@ -8,6 +8,7 @@ from typing import Dict, Tuple, Set
 class SessionConfiguration:
     """Configuration details of a streaming session."""
 
+    request_id: str  # id of the request associated with the session
     server_id: str  # id of the server to route requests to
     model_id: str  # id of the model to invoke on the server
 

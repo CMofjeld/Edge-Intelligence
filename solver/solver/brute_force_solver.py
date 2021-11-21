@@ -76,10 +76,10 @@ class BruteForceSolver(ServingSolver):
                         # Store it in the current solution and keep recursing
                         server_arrival_rates[server.id] += request_rate
                         session_configuration = SessionConfiguration(
-                            server_id=server.id, model_id=model_id
+                            server_id=server.id, model_id=model_id, request_id=request_id
                         )
                         solution[request_id] = session_configuration
-                        self._solve_problem(
+                        self._solve_recursively(
                             remaining_requests, server_arrival_rates, solution
                         )
 
