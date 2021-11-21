@@ -4,7 +4,7 @@ from typing import Dict, List
 
 from controller_dataclasses import SessionConfiguration, SolverParameters
 from solver_base_class import ServingSolver
-from solver_interface import evaluate_serving_solution
+from solver_utils import config_is_valid, evaluate_serving_solution
 
 
 class BruteForceSolver(ServingSolver):
@@ -63,21 +63,19 @@ class BruteForceSolver(ServingSolver):
             # Recursive case - try all configurations for the next remaining request
             request_id = remaining_requests.pop()
             request_rate = self.solver_params.requests[request_id].arrival_rate
-            min_accuracy = self.solver_params.requests[request_id].min_accuracy
             for server in self.solver_params.servers.values():
                 for model_id in server.models_served:
-                    model_accuracy = self.solver_params.models[model_id].accuracy
-                    server_arrival_rate = server_arrival_rates[server.id]
-                    max_throughput = server.profiling_data[model_id].max_throughput
-                    if (server_arrival_rate + request_rate <= max_throughput) and (
-                        model_accuracy >= min_accuracy
+                    session_configuration = SessionConfiguration(
+                        server_id=server.id, model_id=model_id, request_id=request_id
+                    )
+                    if config_is_valid(
+                        session_config=session_configuration,
+                        solver_params=self.solver_params,
+                        server_arrival_rates=server_arrival_rates,
                     ):
                         # Found a potentially viable configuration for the current request
                         # Store it in the current solution and keep recursing
                         server_arrival_rates[server.id] += request_rate
-                        session_configuration = SessionConfiguration(
-                            server_id=server.id, model_id=model_id, request_id=request_id
-                        )
                         solution[request_id] = session_configuration
                         self._solve_recursively(
                             remaining_requests, server_arrival_rates, solution

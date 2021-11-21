@@ -1,7 +1,9 @@
 """Defines the base class for python-based solvers for the inference serving problem."""
-from controller_dataclasses import SolverParameters, SessionConfiguration
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Dict, List
+
+from controller_dataclasses import SessionConfiguration, SolverParameters
+
 
 class ServingSolver(ABC):
     """Defines the interface for solving inference serving problems."""
