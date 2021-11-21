@@ -3,10 +3,11 @@ import copy
 from typing import Dict, List
 
 from controller_dataclasses import SessionConfiguration, SolverParameters
+from solver_base_class import ServingSolver
 from solver_interface import evaluate_serving_solution
 
 
-class BruteForceSolver:
+class BruteForceSolver(ServingSolver):
     """Brute force solver for inference serving problem."""
 
     def __init__(self) -> None:
@@ -19,11 +20,14 @@ class BruteForceSolver:
         self.best_score = 0
         self.solver_params = None
 
-    def fit(self, solver_params: SolverParameters) -> None:
-        """Find a solution for the given parameters and store it in self.solution.
+    def solve(self, solver_params: SolverParameters) -> Dict[str, SessionConfiguration]:
+        """Find a solution to the inference serving problem with the specified parameters.
 
         Args:
             solver_params (SolverParameters): parameters of the inference serving problem
+
+        Returns:
+            Dict[str, SessionConfiguration]: solution mapping request IDs to their configurations
         """
         # Reset to initial state and store parameters
         self._reset()
@@ -35,13 +39,14 @@ class BruteForceSolver:
         server_arrival_rates = {server_id: 0.0 for server_id in solver_params.servers}
 
         # Solve the problem recursively
-        self._solve_problem(
+        self._solve_recursively(
             remaining_requests=remaining_requests,
             server_arrival_rates=server_arrival_rates,
             solution=solution,
         )
+        return self.solution
 
-    def _solve_problem(
+    def _solve_recursively(
         self,
         remaining_requests: List[str],
         server_arrival_rates: Dict[str, float],
