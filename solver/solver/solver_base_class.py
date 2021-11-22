@@ -1,6 +1,6 @@
 """Defines the base class for python-based solvers for the inference serving problem."""
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import Dict
 
 from controller_dataclasses import SessionConfiguration
 from serving_system import ServingSystem

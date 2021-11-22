@@ -2,10 +2,9 @@
 import copy
 from typing import Dict, List
 
-from controller_dataclasses import SessionConfiguration, SolverParameters
+from controller_dataclasses import SessionConfiguration
 from serving_system import ServingSystem
 from solver_base_class import ServingSolver
-from solver_utils import config_is_valid, evaluate_serving_solution
 
 
 class BruteForceSolver(ServingSolver):

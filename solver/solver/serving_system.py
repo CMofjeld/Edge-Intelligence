@@ -3,12 +3,10 @@ from typing import List
 
 from controller_dataclasses import (
     Model,
-    ModelProfilingData,
     Server,
     SessionConfiguration,
     SessionMetrics,
-    SessionRequest,
-    SolverParameters,
+    SessionRequest
 )
 from solver_utils import estimate_serving_latency, estimate_transmission_latency
 
