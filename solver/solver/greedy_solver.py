@@ -2,11 +2,7 @@
 import copy
 from typing import Callable, Dict
 
-from controller_dataclasses import (
-    SessionConfiguration,
-    SessionMetrics
-)
-from serving_system import ServingSystem
+from serving_system import ServingSystem, SessionConfiguration, SessionMetrics
 from solver_base_class import ServingSolver
 
 

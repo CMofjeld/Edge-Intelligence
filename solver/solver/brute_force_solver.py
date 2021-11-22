@@ -2,8 +2,7 @@
 import copy
 from typing import Dict, List
 
-from controller_dataclasses import SessionConfiguration
-from serving_system import ServingSystem
+from serving_system import ServingSystem, SessionConfiguration
 from solver_base_class import ServingSolver
 
 
