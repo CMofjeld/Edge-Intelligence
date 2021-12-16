@@ -1,22 +1,42 @@
 """Definition of brute force solver for inference serving problem."""
 import copy
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 from serving_system import ServingSystem, SessionConfiguration
 from solver_base_class import ServingSolver
 
 
+def sum_squared_latency_and_error(serving_system: ServingSystem) -> float:
+    """Return the sum of the squared latencies and error rates of all requests."""
+    return sum(
+        metric.latency ** 2 + (1 - metric.accuracy) ** 2
+        for metric in serving_system.metrics.values()
+    )
+
+
 class BruteForceSolver(ServingSolver):
     """Brute force solver for inference serving problem."""
 
-    def __init__(self) -> None:
-        """Initialize solver with default values."""
+    def __init__(
+        self,
+        evaluate_solution: Callable[
+            [ServingSystem], float
+        ] = sum_squared_latency_and_error,
+    ) -> None:
+        """Store function passed in for evaluating solutions and set default values for instance variables.
+
+        The function should take in a ServingSystem object and return a single float representing its cost.
+
+        Args:
+            evaluate_solution (Callable[[ServingSystem], float]): function that picks out the metric to optimize for
+        """
+        self.evaluate_solution = evaluate_solution
         self._reset()
 
     def _reset(self) -> None:
         """Reset all solver data to default values."""
         self.solution = None
-        self.best_score = 0
+        self.best_score = float('inf')
 
     def solve(self, serving_system: ServingSystem) -> Dict[str, SessionConfiguration]:
         """Find a solution to the inference serving problem with the specified parameters.
@@ -36,15 +56,12 @@ class BruteForceSolver(ServingSolver):
 
         # Solve the problem recursively
         self._solve_recursively(
-            remaining_requests=remaining_requests,
-            serving_system=serving_system
+            remaining_requests=remaining_requests, serving_system=serving_system
         )
         return self.solution
 
     def _solve_recursively(
-        self,
-        remaining_requests: List[str],
-        serving_system: ServingSystem
+        self, remaining_requests: List[str], serving_system: ServingSystem
     ) -> None:
         """Recursively find a solution to an inference serving problem.
 
@@ -69,7 +86,7 @@ class BruteForceSolver(ServingSolver):
         else:
             # Base case - found a configuration for every request
             # Evaluate the current solution
-            score = min([metrics.SOAI for metrics in serving_system.metrics.values()])
-            if score > self.best_score:
+            score = self.evaluate_solution(serving_system)
+            if score < self.best_score:
                 self.best_score = score
                 self.solution = copy.deepcopy(serving_system.sessions)
