@@ -27,4 +27,4 @@ RUN wget https://github.com/triton-inference-server/server/releases/download/v2.
     rm tritonserver2.12.0-jetpack4.6.tgz
 
 ENTRYPOINT ["/tritonserver/bin/tritonserver"]
-CMD ["--model-repository", "/models", "--backend-directory", "/tritonserver/backends", "--backend-config", "tensorflow,version=2", "--strict-model-config", "false", "--model-control-mode", "explicit", "--load-model", "inception_graphdef"]
+CMD ["--model-repository", "/models", "--backend-directory", "/tritonserver/backends", "--backend-config", "tensorflow,version=2", "--strict-model-config", "false"]
