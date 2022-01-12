@@ -12,22 +12,34 @@ class SessionConfiguration:
 
 
 @dataclass
-class Model:
+class ModelBase:
     """Parameters of a deep learning model."""
 
-    id: str  # unique identifier of the model
     accuracy: float = None  # accuracy score associated with the model
     input_size: int = None  # data size of an individual input to the model
 
 
 @dataclass
-class SessionRequest:
+class Model(ModelBase):
+    """Parameters of a deep learning model."""
+
+    id: str = None  # unique identifier of the model
+
+
+@dataclass
+class SessionRequestBase:
     """Parameters of a streaming session request."""
 
-    id: str  # unique identifier of the request
     arrival_rate: float = None  # expected arrival rate of the request in frames/second
     min_accuracy: float = None  # minimum acceptable accuracy score
     transmission_speed: float = None  # network transmission speed for the request
+
+
+@dataclass
+class SessionRequest(SessionRequestBase):
+    """Parameters of a streaming session request."""
+
+    id: str = None  # unique identifier of the request
 
 
 @dataclass
@@ -40,10 +52,9 @@ class ModelProfilingData:
 
 
 @dataclass
-class Server:
+class ServerBase:
     """Parameters of a worker server."""
 
-    id: str  # unique identifier of the server
     models_served: Set[
         str
     ] = field(default_factory=set)  # set of model IDs for the models offered by the server
@@ -53,16 +64,10 @@ class Server:
 
 
 @dataclass
-class SolverParameters:
-    """Set of parameters needed by the solver to generate a set of session configurations."""
+class Server(ServerBase):
+    """Parameters of a worker server."""
 
-    requests: Dict[
-        str, SessionRequest
-    ] = field(default_factory=dict)  # dictionary mapping request IDs to request parameters
-    servers: Dict[
-        str, Server
-    ] = field(default_factory=dict)  # dictionary mapping server IDs to server parameters
-    models: Dict[str, Model] = field(default_factory=dict)  # dictionary mapping model IDs to model parameters
+    id: str = None  # unique identifier of the server
 
 
 @dataclass
@@ -71,7 +76,7 @@ class SessionMetrics:
 
     accuracy: float = None # accuracy score of the assigned model
     latency: float = None # expected E2E latency for the request
-    SOAI: float = None # speed of accurate inferences (accuracy / latency)
+    cost: float = None # individual cost score for the request
 
 
 class ServingSystem:
@@ -121,15 +126,16 @@ class ServingSystem:
             # Invalid configuration
             return False
 
-    def clear_session(self, request_id) -> None:
+    def clear_session(self, request_id: str) -> None:
         """Reset the session configuration for the request to empty and update related tables.
 
         Args:
-            request_id ([type]): ID of the request
+            request_id ([str]): ID of the request
         """
         if request_id in self.sessions:
             old_config = self.sessions[request_id]
             del self.sessions[request_id]
+            del self.metrics[request_id]
             self.requests_served_by[old_config.server_id].remove(request_id)
             self.arrival_rates[old_config.server_id] -= self.requests[request_id].arrival_rate
             self.update_metrics_for_requests_served_by(old_config.server_id)
@@ -172,9 +178,9 @@ class ServingSystem:
             transmission_latency = estimate_transmission_latency(input_size, transmission_speed)
             metrics.latency = serving_latency + transmission_latency
 
-            # Update accuracy and SOAI
+            # Update accuracy and cost
             metrics.accuracy = self.models[model_id].accuracy
-            metrics.SOAI = metrics.accuracy / metrics.latency
+            metrics.cost = (1 - metrics.accuracy)**2 + metrics.latency**2
 
 
     def is_valid_config(self, session_config: SessionConfiguration) -> bool:
@@ -222,6 +228,22 @@ class ServingSystem:
         """
         if new_request.id not in self.requests:
             self.requests[new_request.id] = new_request
+            return True
+        else:
+            return False
+
+    def remove_request(self, request_id: str) -> bool:
+        """Remove a session request from the table of requests.
+
+        Args:
+            request_id (str): ID of the request to remove
+
+        Returns:
+            bool: True for success
+        """
+        if request_id in self.requests:
+            self.clear_session(request_id=request_id)
+            del self.requests[request_id]
             return True
         else:
             return False
