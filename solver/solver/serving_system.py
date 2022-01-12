@@ -1,6 +1,6 @@
 """Definition of class that models the inference serving system as a whole."""
 from typing import Dict, List, Set
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 
 @dataclass
 class SessionConfiguration:
@@ -55,9 +55,9 @@ class ModelProfilingData:
 class ServerBase:
     """Parameters of a worker server."""
 
-    models_served: Set[
+    models_served: List[
         str
-    ] = field(default_factory=set)  # set of model IDs for the models offered by the server
+    ] = field(default_factory=list)  # set of model IDs for the models offered by the server
     profiling_data: Dict[
         str, ModelProfilingData
     ] = field(default_factory=dict)  # maps model IDs to their profiling data
@@ -198,6 +198,10 @@ class ServingSystem:
         if (request_id not in self.requests) or (model_id not in self.models) or (server_id not in self.servers):
             return False
 
+        # Check that server is actually serving the model
+        if model_id not in self.servers[server_id].models_served:
+            return False
+
         # Throughput constraint
         request_rate = self.requests[request_id].arrival_rate
         server_rate = self.arrival_rates[server_id]
@@ -283,6 +287,33 @@ class ServingSystem:
             return True
         else:
             return False
+
+    def json(self) -> Dict:
+        """Serialize the serving system to a JSON object."""
+        json_dict = {
+            "requests": [asdict(request) for request in self.requests.values()],
+            "servers": [asdict(server) for server in self.servers.values()],
+            "models": [asdict(model) for model in self.models.values()],
+            "sessions": [asdict(session) for session in self.sessions.values()],
+        }
+        return json_dict
+
+    def load_from_json(self, json_dict: Dict) -> None:
+        """Fill in the serving system model from a JSON object."""
+        requests = [SessionRequest(**request_dict) for request_dict in json_dict["requests"]]
+        for request in requests:
+            self.add_request(request)
+        servers = [Server(**server_dict) for server_dict in json_dict["servers"]]
+        for server in servers:
+            for model_id, profiling_dict in server.profiling_data.items():
+                server.profiling_data[model_id] = ModelProfilingData(**profiling_dict)
+            self.add_server(server)
+        models = [Model(**model_dict) for model_dict in json_dict["models"]]
+        for model in models:
+            self.add_model(model)
+        sessions = [SessionConfiguration(**session_dict) for session_dict in json_dict["sessions"]]
+        for session in sessions:
+            self.set_session(session)
 
 def estimate_serving_latency(lamda: float, alpha: float, beta: float) -> float:
     """Estimate the expected latency for a request to an inference server.
