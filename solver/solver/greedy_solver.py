@@ -1,31 +1,26 @@
-"""Definition of basic greedy algorithm solver for inference serving problem."""
+"""Definition of greedy solver for inference serving problem."""
 import copy
-from typing import Callable, Dict
+from typing import Dict
 
-from serving_system import ServingSystem, SessionConfiguration, SessionMetrics
+from serving_system import ServingSystem, SessionConfiguration
+from request_sorter import RequestSorter
 from solver_base_class import ServingSolver
+from session_config_sorter import SessionConfigSorter
 
 
 class GreedySolver(ServingSolver):
-    """Solver that uses a basic greedy algorithm to solver inference serving problems."""
+    """Solver that uses a greedy algorithm to solve inference serving problems."""
 
-    def __init__(self, evaluate_config: Callable[[SessionMetrics], float]) -> None:
-        """Store function passed in for evaluating a set of metrics.
+    def __init__(self, request_sorter: RequestSorter, config_sorter: SessionConfigSorter) -> None:
+        super().__init__()
+        self._request_sorter = request_sorter
+        self._config_sorter = config_sorter
 
-        The function should take in a set of session metrics and return a single float representing its reward.
-
-        Args:
-            evaluate_config (Callable[[SessionMetrics], float]): function that picks out the metric to optimize for
-        """
-        self.evaluate_config = evaluate_config
 
     def solve(self, serving_system: ServingSystem) -> Dict[str, SessionConfiguration]:
         """Find a solution to the inference serving problem with the specified parameters.
 
-        For each request, the greedy algorithm picks the session configuration that yields the highest reward,
-        according to the function passed in to the solver's constructor. Partial solutions are permitted,
-        meaning the solver may return a solution that fails to route some of the listed requests, if it could
-        not find a valid route for them.
+        TODO
 
         Args:
             serving_system (ServingSystem): model of the inference serving problem instance
@@ -33,24 +28,30 @@ class GreedySolver(ServingSolver):
         Returns:
             Dict[str, SessionConfiguration]: solution mapping request IDs to their configurations
         """
-        for request_id in serving_system.requests:
-            for server_id in serving_system.servers:
-                # Find the configuration that yields the best score for this request
-                best_score = 0
-                best_configuration = None
-                for model_id in serving_system.servers[server_id].models_served:
-                    session_configuration = SessionConfiguration(
-                        request_id, server_id, model_id
-                    )
-                    if serving_system.set_session(session_configuration):
-                        # Valid configuration found - check if it's better than current best
-                        score = self.evaluate_config(serving_system.metrics[request_id])
-                        if score > best_score:
-                            best_score = score
-                            best_configuration = session_configuration
-                # Set the configuration to the best one found
-                if best_configuration is not None:
-                    serving_system.set_session(session_configuration)
-        solution = copy.deepcopy(serving_system.sessions)
+        # Ensure no previous session configurations are set
         serving_system.clear_all_sessions()
+
+        # Sort list of requests
+        sorted_requests = self._request_sorter.sort(serving_system)
+
+        # Assign routes one-by-one
+        for request in sorted_requests:
+            # Find the configuration that yields the best cost for this request
+            valid_configs = []
+            for server_id in serving_system.servers:
+                for model_id in serving_system.servers[server_id].models_served:
+                    session_config = SessionConfiguration(request.id, server_id, model_id)
+                    if serving_system.is_valid_config(session_config):
+                        valid_configs.append(session_config)
+            if valid_configs:
+                sorted_configs = self._config_sorter.sort(valid_configs, serving_system)
+                serving_system.set_session(sorted_configs[0])
+
+        # Copy the solution
+        solution = copy.deepcopy(serving_system.sessions)
+
+        # Reset the system
+        serving_system.clear_all_sessions()
+
+        # Return the result
         return solution
