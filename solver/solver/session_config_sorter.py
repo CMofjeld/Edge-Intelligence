@@ -3,7 +3,8 @@ import random
 from abc import ABC, abstractmethod
 from typing import List
 
-from serving_system import ServingSystem, SessionConfiguration, SessionRequest
+from serving_dataclasses import SessionConfiguration, SessionRequest
+from serving_system import ServingSystem
 
 
 class SessionConfigSorter(ABC):

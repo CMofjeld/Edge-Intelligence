@@ -2,7 +2,8 @@
 import copy
 from typing import Callable, Dict, List
 
-from serving_system import ServingSystem, SessionConfiguration
+from serving_system import ServingSystem
+from serving_dataclasses import SessionConfiguration
 from solver_base_class import ServingSolver
 
 

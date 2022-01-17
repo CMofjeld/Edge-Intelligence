@@ -1,96 +1,28 @@
 """Definition of class that models the inference serving system as a whole."""
-from typing import Dict, List, Set
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict
+from typing import Dict, List
 
-@dataclass
-class SessionConfiguration:
-    """Configuration details of a streaming session."""
-
-    request_id: str  # id of the request associated with the session
-    server_id: str  # id of the server to route requests to
-    model_id: str  # id of the model to invoke on the server
-
-
-@dataclass
-class ModelBase:
-    """Parameters of a deep learning model."""
-
-    accuracy: float = None  # accuracy score associated with the model
-    input_size: int = None  # data size of an individual input to the model
-
-
-@dataclass
-class Model(ModelBase):
-    """Parameters of a deep learning model."""
-
-    id: str = None  # unique identifier of the model
-
-
-@dataclass
-class SessionRequestBase:
-    """Parameters of a streaming session request."""
-
-    arrival_rate: float = None  # expected arrival rate of the request in frames/second
-    min_accuracy: float = None  # minimum acceptable accuracy score
-    transmission_speed: float = None  # network transmission speed for the request
-
-
-@dataclass
-class SessionRequest(SessionRequestBase):
-    """Parameters of a streaming session request."""
-
-    id: str = None  # unique identifier of the request
-
-
-@dataclass
-class ModelProfilingData:
-    """Profiling data for a single deep learning model on a single worker server."""
-
-    alpha: float = None  # coefficient relating batch size to computation time
-    beta: float = None  # coefficient relating batch size to computation time
-    max_throughput: float = None  # maximum throughput for the model on the worker
-
-
-@dataclass
-class ServerBase:
-    """Parameters of a worker server."""
-
-    models_served: List[
-        str
-    ] = field(default_factory=list)  # set of model IDs for the models offered by the server
-    profiling_data: Dict[
-        str, ModelProfilingData
-    ] = field(default_factory=dict)  # maps model IDs to their profiling data
-
-
-@dataclass
-class Server(ServerBase):
-    """Parameters of a worker server."""
-
-    id: str = None  # unique identifier of the server
-
-
-@dataclass
-class SessionMetrics:
-    """Set of metrics used to evaluate the quality of service for a request."""
-
-    accuracy: float = None # accuracy score of the assigned model
-    latency: float = None # expected E2E latency for the request
-    cost: float = None # individual cost score for the request
+from cost_calculator import CostCalculator
+from serving_dataclasses import (Model, ModelProfilingData, Server,
+                                 SessionConfiguration, SessionMetrics,
+                                 SessionRequest)
 
 
 class ServingSystem:
     """Encapsulates information about an entire inference serving system."""
     def __init__(
-        self, requests: List[SessionRequest] = [], models: List[Model] = [], servers: List[Server] = []
+        self, cost_calc: CostCalculator, requests: List[SessionRequest] = [], models: List[Model] = [], servers: List[Server] = []
     ) -> None:
         """Initialize the system's table of requests, models, and servers.
 
         Args:
+            cost_calc (CostCalculator): algorithm to calculate per-session cost
             requests (List[SessionRequest]): list of session requests
             models (List[Model]): list of deep learning models
             servers (List[Server]): list of worker servers
         """
+        # Store cost algorithm
+        self.cost_calc = cost_calc
         # Map the objects to their IDs
         self.requests = {request.id: request for request in requests}
         self.models = {model.id: model for model in models}
@@ -180,7 +112,7 @@ class ServingSystem:
 
             # Update accuracy and cost
             metrics.accuracy = self.models[model_id].accuracy
-            metrics.cost = (1 - metrics.accuracy)**2 + metrics.latency**2
+            self.cost_calc.set_session_cost(metrics)
 
 
     def is_valid_config(self, session_config: SessionConfiguration) -> bool:

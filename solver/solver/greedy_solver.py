@@ -2,7 +2,8 @@
 import copy
 from typing import Dict, List
 
-from serving_system import ServingSystem, SessionConfiguration, SessionRequest
+from serving_system import ServingSystem
+from serving_dataclasses import SessionConfiguration, SessionRequest
 from request_sorter import RequestSorter
 from solver_base_class import ServingSolver
 from session_config_sorter import SessionConfigSorter
