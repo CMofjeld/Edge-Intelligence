@@ -34,6 +34,7 @@ class SessionRequestBase:
     arrival_rate: float = None  # expected arrival rate of the request in frames/second
     min_accuracy: float = None  # minimum acceptable accuracy score
     transmission_speed: float = None  # network transmission speed for the request
+    propagation_delay: float = None # network propagation delay from user device to the system
 
 
 @dataclass
