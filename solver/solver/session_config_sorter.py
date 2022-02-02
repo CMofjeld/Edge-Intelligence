@@ -27,7 +27,7 @@ class SessionConfigSorter(ABC):
 
 
 class RandomConfigSorter(SessionConfigSorter):
-    """Randomly shuffles the list of session requests."""
+    """Randomly shuffles the list of session configurations."""
 
     def sort(
         self, session_configs: List[SessionConfiguration], serving_system: ServingSystem
@@ -45,14 +45,14 @@ class RandomConfigSorter(SessionConfigSorter):
 
 
 class LCFConfigSorter(SessionConfigSorter):
-    """Request sorter that orders the configurations by total cost in descending order (Least Cost First)."""
+    """Configuration sorter that orders the configurations by total cost in ascending order (Least Cost First)."""
 
     def sort(
         self, session_configs: List[SessionConfiguration], serving_system: ServingSystem
     ) -> List[SessionRequest]:
         """Return the provided list of session configurations in sorted order.
 
-        Orders the configurations by total cost in descending order, where a single request's cost is defined
+        Orders the configurations by total cost in ascending order, where a single request's cost is defined
         as the sum of the squares of a request's error score and expected latency. The total cost is the sum
         of the cost of all requests for the serving system. This algorithm prioritizes configurations that
         have the smallest impact on the total cost for the entire system.
@@ -119,3 +119,49 @@ class LCFConfigSorter(SessionConfigSorter):
 
         # Return result
         return cost
+
+
+class GCFConfigSorter(SessionConfigSorter):
+    """Configuration sorter that orders the configurations by server capacity in descending order (Greatest Capacity First)."""
+
+    def sort(
+        self, session_configs: List[SessionConfiguration], serving_system: ServingSystem
+    ) -> List[SessionRequest]:
+        """Return the provided list of session configurations in sorted order.
+
+        Orders the configurations by total cost in descending order, where a single request's cost is defined
+        as the sum of the squares of a request's error score and expected latency. The total cost is the sum
+        of the cost of all requests for the serving system. This algorithm prioritizes configurations that
+        have the smallest impact on the total cost for the entire system.
+
+        Args:
+            session_configs (List[SessionConfiguration]): session configurations to sort
+            serving_system (ServingSystem): model of the inference serving problem instance
+
+        Returns:
+            List[SessionRequest]: sorted list of session configurations
+        """
+        sorted_configs = sorted(
+            session_configs,
+            key=lambda config: self._remaining_capacity(
+                session_config=config, serving_system=serving_system
+            ),
+            reverse=True
+        )
+        return sorted_configs
+
+    def _remaining_capacity(self, session_config: SessionConfiguration, serving_system: ServingSystem) -> float:
+        """Return the maximum additional requests per second a given server/model combination can support.
+
+        Args:
+            session_config (SessionConfiguration): session configuration to consider
+            serving_system (ServingSystem): model of the inference serving problem instance
+
+        Returns:
+            float: remaining capacity for the specified server and model in requests per second
+        """
+        server_id, model_id = session_config.server_id, session_config.model_id
+        max_throughput = serving_system.servers[server_id].profiling_data[model_id].max_throughput
+        current_load = serving_system.arrival_rates[server_id]
+        remaining_capacity = max_throughput - current_load
+        return remaining_capacity
