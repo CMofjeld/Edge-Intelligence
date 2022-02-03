@@ -138,7 +138,7 @@ class ServingSystem:
         )
 
         # Update cost
-        self.cost_calc.set_session_cost(metrics)
+        metrics.cost = self.cost_calc.session_cost(metrics)
 
     def update_metrics_for_requests_served_by(self, server_id: str) -> None:
         """Recalculate the metrics for all requests served by a server."""
