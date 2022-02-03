@@ -23,14 +23,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest pydocstyle
+        pip install pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test with pytest
       run: |
         pytest
-    - name: Lint with flake8
-      run: |
-        flake8 . --count --statistics --max-line-length=88 --select=B,C,E,F,W,T4,B9 --ignore=E203,E266,E501,W503 --max-complexity=18
-    - name: Lint with pydocstyle
-      run: |
-        pydocstyle --match='(?!test_|__).*\.py' --convention='google'
