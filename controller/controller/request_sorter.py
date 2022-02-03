@@ -3,8 +3,8 @@ import random
 from abc import ABC, abstractmethod
 from typing import List
 
-from serving_dataclasses import SessionRequest
-from serving_system import ServingSystem
+from controller.serving_dataclasses import SessionRequest
+from controller.serving_system import ServingSystem
 
 
 class RequestSorter(ABC):

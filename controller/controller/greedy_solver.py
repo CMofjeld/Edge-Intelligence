@@ -2,11 +2,11 @@
 import copy
 from typing import Dict, List
 
-from serving_system import ServingSystem
-from serving_dataclasses import SessionConfiguration, SessionRequest
-from request_sorter import RequestSorter
-from solver_base_class import ServingSolver
-from session_config_sorter import SessionConfigSorter
+from controller.serving_system import ServingSystem
+from controller.serving_dataclasses import SessionConfiguration, SessionRequest
+from controller.request_sorter import RequestSorter
+from controller.solver_base_class import ServingSolver
+from controller.session_config_sorter import SessionConfigSorter
 
 
 class GreedySolver(ServingSolver):

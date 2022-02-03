@@ -2,9 +2,9 @@
 import copy
 from typing import Callable, Dict, List
 
-from serving_system import ServingSystem
-from serving_dataclasses import SessionConfiguration
-from solver_base_class import ServingSolver
+from controller.serving_system import ServingSystem
+from controller.serving_dataclasses import SessionConfiguration
+from controller.solver_base_class import ServingSolver
 
 
 def sum_squared_latency_and_error(serving_system: ServingSystem) -> float:

@@ -4,15 +4,15 @@ from typing import Tuple
 import copy
 import pytest
 
-from cost_calculator import LESumOfSquaresCost
-from serving_dataclasses import (
+from controller.cost_calculator import LESumOfSquaresCost
+from controller.serving_dataclasses import (
     Model,
     ModelProfilingData,
     Server,
     SessionConfiguration,
     SessionRequest,
 )
-from serving_system import (
+from controller.serving_system import (
     ServingSystem,
     estimate_model_serving_latency,
     estimate_transmission_latency,

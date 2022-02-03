@@ -63,6 +63,16 @@ class ServerBase:
     profiling_data: Dict[
         str, ModelProfilingData
     ] = field(default_factory=dict)  # maps model IDs to their profiling data
+    serving_latency: Dict[
+        str, float
+    ] = field(default_factory=dict)  # maps model IDs to expected serving latency
+    arrival_rate: Dict[
+        str, float
+    ] = field(default_factory=dict)  # maps model IDs to total scheduled arrival rate for that model
+    requests_served: List[
+        str
+    ] = field(default_factory=list)  # set of request IDs for requests scheduled to be served by the server
+
 
 
 @dataclass

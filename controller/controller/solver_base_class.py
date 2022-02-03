@@ -2,8 +2,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict
 
-from serving_system import ServingSystem
-from serving_dataclasses import SessionConfiguration
+from controller.serving_system import ServingSystem
+from controller.serving_dataclasses import SessionConfiguration
 
 
 class ServingSolver(ABC):

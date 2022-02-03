@@ -2,16 +2,26 @@
 from dataclasses import asdict
 from typing import Dict, List
 
-from cost_calculator import CostCalculator
-from serving_dataclasses import (Model, ModelProfilingData, Server,
-                                 SessionConfiguration, SessionMetrics,
-                                 SessionRequest)
+from controller.cost_calculator import CostCalculator
+from controller.serving_dataclasses import (
+    Model,
+    ModelProfilingData,
+    Server,
+    SessionConfiguration,
+    SessionMetrics,
+    SessionRequest,
+)
 
 
 class ServingSystem:
     """Encapsulates information about an entire inference serving system."""
+
     def __init__(
-        self, cost_calc: CostCalculator, requests: List[SessionRequest] = [], models: List[Model] = [], servers: List[Server] = []
+        self,
+        cost_calc: CostCalculator,
+        requests: List[SessionRequest] = [],
+        models: List[Model] = [],
+        servers: List[Server] = [],
     ) -> None:
         """Initialize the system's table of requests, models, and servers.
 
@@ -50,8 +60,15 @@ class ServingSystem:
                     return True
             # Record new session and update affected tables
             self.sessions[new_config.request_id] = new_config
-            self.requests_served_by[new_config.server_id].add(new_config.request_id)
-            self.arrival_rates[new_config.server_id] += self.requests[new_config.request_id].arrival_rate
+            # self.requests_served_by[new_config.server_id].add(new_config.request_id)
+            # self.arrival_rates[new_config.server_id] += self.requests[
+            #     new_config.request_id
+            # ].arrival_rate
+            server = self.servers[new_config.server_id]
+            server.requests_served.append(new_config.request_id)
+            server.arrival_rate[new_config.model_id] += self.requests[
+                new_config.request_id
+            ].arrival_rate
             self.update_metrics_for_requests_served_by(new_config.server_id)
             return True
         else:
@@ -68,52 +85,87 @@ class ServingSystem:
             old_config = self.sessions[request_id]
             del self.sessions[request_id]
             del self.metrics[request_id]
-            self.requests_served_by[old_config.server_id].remove(request_id)
-            self.arrival_rates[old_config.server_id] -= self.requests[request_id].arrival_rate
-            self.update_metrics_for_requests_served_by(old_config.server_id)
+            # self.requests_served_by[old_config.server_id].remove(request_id)
+            # self.arrival_rates[old_config.server_id] -= self.requests[
+            #     request_id
+            # ].arrival_rate
+            server = self.servers[old_config.server_id]
+            server.requests_served.remove(request_id)
+            server.arrival_rate[old_config.model_id] -= self.requests[
+                request_id
+            ].arrival_rate
+            self.update_metrics_for_requests_served_by(server.id)
 
     def clear_all_sessions(self) -> None:
         """Clear all session configurations and reset related tables to default values."""
         self.sessions = {}
         self.metrics = {}
-        self.requests_served_by = {server_id: set() for server_id in self.servers}
-        self.arrival_rates = {server_id: 0.0 for server_id in self.servers}
-    
-    def update_metrics_for_requests_served_by(self, server_id: float) -> None:
-        """Recalculate the metrics for all requests served by a server.
+        # self.requests_served_by = {server_id: set() for server_id in self.servers}
+        # self.arrival_rates = {server_id: 0.0 for server_id in self.servers}
+        for server in self.servers.values():
+            server.arrival_rate = {model_id: 0.0 for model_id in server.models_served}
+            server.serving_latency = {
+                model_id: 0.0 for model_id in server.models_served
+            }
+            server.requests_served = []
 
-        Args:
-            server_id (float): ID of the server
-        """
+    def update_metrics(self, request_id: str) -> None:
+        """Recalculate the metrics for a single request."""
+        # Validate request_id
+        if request_id not in self.requests:
+            raise Exception("invalid request ID")
+        elif request_id not in self.sessions:
+            raise Exception("no session set for request ID")
+
+        request = self.requests[request_id]
+        session = self.sessions[request_id]
+        if request_id not in self.metrics:
+            self.metrics[request_id] = SessionMetrics()
+        metrics = self.metrics[request_id]
+        server_id, model_id = session.server_id, session.model_id
+
+        # Update accuracy
+        metrics.accuracy = self.models[model_id].accuracy
+
+        # Update latency
+        serving_latency = self.servers[server_id].serving_latency[model_id]
+        input_size = self.models[model_id].input_size
+        transmission_latency = estimate_transmission_latency(
+            input_size, request.transmission_speed
+        )
+        metrics.latency = (
+            serving_latency + transmission_latency + request.propagation_delay
+        )
+
+        # Update cost
+        self.cost_calc.set_session_cost(metrics)
+
+    def update_metrics_for_requests_served_by(self, server_id: str) -> None:
+        """Recalculate the metrics for all requests served by a server."""
         # Validate server_id
         if server_id not in self.servers:
-            return
+            raise Exception("invalid server ID")
+        # Ensure serving latency is up-to-date
+        self.upate_serving_latency(server_id)
+        # Update the affected sessions
+        for request_id in self.servers[server_id].requests_served:
+            self.update_metrics(request_id)
 
-        # Find the affected sessions
-        affected_requests = self.requests_served_by[server_id]
-
-        # Update their metrics
-        lamda = self.arrival_rates[server_id]
-        for request_id in affected_requests:
-            if request_id not in self.metrics:
-                self.metrics[request_id] = SessionMetrics()
-            metrics = self.metrics[request_id]
-            session = self.sessions[request_id]
-            model_id = session.model_id
-
-            # Calculate latency
-            alpha = self.servers[server_id].profiling_data[model_id].alpha
-            beta = self.servers[server_id].profiling_data[model_id].beta
-            serving_latency = estimate_serving_latency(lamda, alpha, beta)
-            transmission_speed = self.requests[request_id].transmission_speed
-            input_size = self.models[model_id].input_size
-            transmission_latency = estimate_transmission_latency(input_size, transmission_speed)
-            metrics.latency = serving_latency + transmission_latency
-
-            # Update accuracy and cost
-            metrics.accuracy = self.models[model_id].accuracy
-            self.cost_calc.set_session_cost(metrics)
-
+    def upate_serving_latency(self, server_id) -> None:
+        if server_id not in self.servers:
+            raise Exception("invalid server ID")
+        server = self.servers[server_id]
+        combined_latency = 0.0
+        for model_id in server.models_served:
+            if server.arrival_rate[model_id] > 0:
+                profiling_data = server.profiling_data[model_id]
+                combined_latency += estimate_model_serving_latency(
+                    server.arrival_rate[model_id],
+                    profiling_data.alpha,
+                    profiling_data.beta,
+                )
+        for model_id in server.models_served:
+            server.serving_latency[model_id] = combined_latency
 
     def is_valid_config(self, session_config: SessionConfiguration) -> bool:
         """Determine whether a given session configuration satisfies the system's constraints.
@@ -124,21 +176,38 @@ class ServingSystem:
         Returns:
             bool: True if the configuration violates no constraints
         """
-        request_id, server_id, model_id = session_config.request_id, session_config.server_id, session_config.model_id
+        request_id, server_id, model_id = (
+            session_config.request_id,
+            session_config.server_id,
+            session_config.model_id,
+        )
 
         # Check that request, server, and model are tracked by the system
-        if (request_id not in self.requests) or (model_id not in self.models) or (server_id not in self.servers):
+        if (
+            (request_id not in self.requests)
+            or (model_id not in self.models)
+            or (server_id not in self.servers)
+        ):
             return False
 
         # Check that server is actually serving the model
-        if model_id not in self.servers[server_id].models_served:
+        server = self.servers[server_id]
+        if model_id not in server.models_served:
             return False
 
         # Throughput constraint
         request_rate = self.requests[request_id].arrival_rate
-        server_rate = self.arrival_rates[server_id]
-        max_throughput = self.servers[server_id].profiling_data[model_id].max_throughput
-        if server_rate + request_rate > max_throughput:
+        requested_capacity = (
+            request_rate / server.profiling_data[model_id].max_throughput
+        )
+        remaining_capacity = 1 - sum(
+            [
+                server.arrival_rate[model_id]
+                / server.profiling_data[model_id].max_throughput
+                for model_id in server.models_served
+            ]
+        )
+        if requested_capacity > remaining_capacity:
             return False
 
         # Accuracy constraint
@@ -227,12 +296,15 @@ class ServingSystem:
             "servers": [asdict(server) for server in self.servers.values()],
             "models": [asdict(model) for model in self.models.values()],
             "sessions": [asdict(session) for session in self.sessions.values()],
+            "metrics": {request_id: asdict(metrics) for request_id, metrics in self.metrics.items()} # TODO remove
         }
         return json_dict
 
     def load_from_json(self, json_dict: Dict) -> None:
         """Fill in the serving system model from a JSON object."""
-        requests = [SessionRequest(**request_dict) for request_dict in json_dict["requests"]]
+        requests = [
+            SessionRequest(**request_dict) for request_dict in json_dict["requests"]
+        ]
         for request in requests:
             self.add_request(request)
         servers = [Server(**server_dict) for server_dict in json_dict["servers"]]
@@ -243,12 +315,16 @@ class ServingSystem:
         models = [Model(**model_dict) for model_dict in json_dict["models"]]
         for model in models:
             self.add_model(model)
-        sessions = [SessionConfiguration(**session_dict) for session_dict in json_dict["sessions"]]
+        sessions = [
+            SessionConfiguration(**session_dict)
+            for session_dict in json_dict["sessions"]
+        ]
         for session in sessions:
             self.set_session(session)
 
-def estimate_serving_latency(lamda: float, alpha: float, beta: float) -> float:
-    """Estimate the expected latency for a request to an inference server.
+
+def estimate_model_serving_latency(lamda: float, alpha: float, beta: float) -> float:
+    """Estimate the expected latency for a request to a single model on an inference server.
 
     The estimation is based on the formulas derived in the following paper by Yoshiaki Inoue:
     "Queueing analysis of GPU-based inference servers with dynamic batching: A closed-form characterization"

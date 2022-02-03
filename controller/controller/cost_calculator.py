@@ -1,7 +1,7 @@
 """Algorithms for calculating the optimization cost for a single request."""
 from abc import ABC, abstractmethod
 
-from serving_dataclasses import SessionMetrics
+from controller.serving_dataclasses import SessionMetrics
 
 
 class CostCalculator(ABC):

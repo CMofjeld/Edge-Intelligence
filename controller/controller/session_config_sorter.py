@@ -3,8 +3,8 @@ import random
 from abc import ABC, abstractmethod
 from typing import List
 
-from serving_dataclasses import SessionConfiguration, SessionRequest
-from serving_system import ServingSystem
+from controller.serving_dataclasses import SessionConfiguration, SessionRequest
+from controller.serving_system import ServingSystem
 
 
 class SessionConfigSorter(ABC):
@@ -98,16 +98,17 @@ class LCFConfigSorter(SessionConfigSorter):
             prev_config = None
 
         # Calculate increase in cost
+        server = serving_system.servers[server_id]
         cost_before = sum(
             serving_system.metrics[served_id].cost
-            for served_id in serving_system.requests_served_by[server_id]
+            for served_id in server.requests_served
         )
-        if prev_config:
+        if prev_config and request_id not in server.requests_served:
             cost_before += serving_system.metrics[request_id].cost
         serving_system.set_session(session_config)
         cost_after = sum(
             serving_system.metrics[served_id].cost
-            for served_id in serving_system.requests_served_by[server_id]
+            for served_id in server.requests_served
         )
         cost = cost_after - cost_before
 
@@ -151,7 +152,7 @@ class GCFConfigSorter(SessionConfigSorter):
         return sorted_configs
 
     def _remaining_capacity(self, session_config: SessionConfiguration, serving_system: ServingSystem) -> float:
-        """Return the maximum additional requests per second a given server/model combination can support.
+        """Return the maximum additional utilization a given server/model combination can support.
 
         Args:
             session_config (SessionConfiguration): session configuration to consider
@@ -160,8 +161,12 @@ class GCFConfigSorter(SessionConfigSorter):
         Returns:
             float: remaining capacity for the specified server and model in requests per second
         """
-        server_id, model_id = session_config.server_id, session_config.model_id
-        max_throughput = serving_system.servers[server_id].profiling_data[model_id].max_throughput
-        current_load = serving_system.arrival_rates[server_id]
-        remaining_capacity = max_throughput - current_load
+        server = serving_system.servers[session_config.server_id]
+        remaining_capacity = 1 - sum(
+            [
+                server.arrival_rate[model_id]
+                / server.profiling_data[model_id].max_throughput
+                for model_id in server.models_served
+            ]
+        )
         return remaining_capacity
