@@ -12,6 +12,7 @@ class CostCalculator(ABC):
         """Return the cost for a SessionMetrics object based on the other metrics."""
         pass
 
+
 class LESumOfSquaresCost(ABC):
     """Defines the per-request cost as the weighted sum of their squared latency (L) and error rate (E)."""
 
@@ -22,7 +23,11 @@ class LESumOfSquaresCost(ABC):
 
     def session_cost(self, session_metrics: SessionMetrics) -> float:
         """Return the weighted sum of the squared latency and error rate."""
-        return self.latency_weight * session_metrics.latency**2 + (1 - session_metrics.accuracy)**2
+        return (
+            self.latency_weight * session_metrics.latency ** 2
+            + (1 - session_metrics.accuracy) ** 2
+        )
+
 
 class LESumCost(ABC):
     """Defines the per-request cost as the weighted sum of their latency (L) and error rate (E)."""
@@ -34,4 +39,6 @@ class LESumCost(ABC):
 
     def session_cost(self, session_metrics: SessionMetrics) -> float:
         """Return the weighted sum of the latency and error rate."""
-        return self.latency_weight * session_metrics.latency + (1 - session_metrics.accuracy)
+        return self.latency_weight * session_metrics.latency + (
+            1 - session_metrics.accuracy
+        )

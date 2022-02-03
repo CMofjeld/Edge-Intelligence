@@ -237,7 +237,11 @@ def test_throughput_constraint_1_request(
 ):
     # Setup
     system, session_config = example_valid_session_setup
-    request_id, model_id, server_id = session_config.request_id, session_config.model_id, session_config.server_id
+    request_id, model_id, server_id = (
+        session_config.request_id,
+        session_config.model_id,
+        session_config.server_id,
+    )
     request = system.requests[request_id]
     server = system.servers[server_id]
     request.arrival_rate = server.profiling_data[model_id].max_throughput + 1.0
@@ -252,14 +256,22 @@ def test_throughput_constraint_2_requests_same_model_invalid(
     # Setup
     system, session_config1 = example_valid_session_setup
     assert system.set_session(session_config1)
-    request_id1, model_id, server_id = session_config1.request_id, session_config1.model_id, session_config1.server_id
+    request_id1, model_id, server_id = (
+        session_config1.request_id,
+        session_config1.model_id,
+        session_config1.server_id,
+    )
     request1 = system.requests[request_id1]
     server = system.servers[server_id]
     request2 = copy.deepcopy(request1)
     request2.id = request1.id + "2"
-    request2.arrival_rate = server.profiling_data[model_id].max_throughput - request1.arrival_rate + 1.0
+    request2.arrival_rate = (
+        server.profiling_data[model_id].max_throughput - request1.arrival_rate + 1.0
+    )
     assert system.add_request(request2)
-    session_config2 = SessionConfiguration(request_id=request2.id, server_id=server_id, model_id=model_id)
+    session_config2 = SessionConfiguration(
+        request_id=request2.id, server_id=server_id, model_id=model_id
+    )
 
     # Test
     assert not system.set_session(session_config2)
@@ -271,14 +283,22 @@ def test_throughput_constraint_2_requests_same_model_valid(
     # Setup
     system, session_config1 = example_valid_session_setup
     assert system.set_session(session_config1)
-    request_id1, model_id, server_id = session_config1.request_id, session_config1.model_id, session_config1.server_id
+    request_id1, model_id, server_id = (
+        session_config1.request_id,
+        session_config1.model_id,
+        session_config1.server_id,
+    )
     request1 = system.requests[request_id1]
     server = system.servers[server_id]
     request2 = copy.deepcopy(request1)
     request2.id = request1.id + "2"
-    request2.arrival_rate = server.profiling_data[model_id].max_throughput - request1.arrival_rate
+    request2.arrival_rate = (
+        server.profiling_data[model_id].max_throughput - request1.arrival_rate
+    )
     assert system.add_request(request2)
-    session_config2 = SessionConfiguration(request_id=request2.id, server_id=server_id, model_id=model_id)
+    session_config2 = SessionConfiguration(
+        request_id=request2.id, server_id=server_id, model_id=model_id
+    )
 
     # Test
     assert system.set_session(session_config2)
@@ -290,16 +310,26 @@ def test_throughput_constraint_2_requests_different_model_valid(
     # Setup
     system, session_config1 = example_valid_session_setup
     assert system.set_session(session_config1)
-    request_id1, model_id1, server_id = session_config1.request_id, session_config1.model_id, session_config1.server_id
+    request_id1, model_id1, server_id = (
+        session_config1.request_id,
+        session_config1.model_id,
+        session_config1.server_id,
+    )
     request1 = system.requests[request_id1]
     server = system.servers[server_id]
     request2 = copy.deepcopy(request1)
     request2.id = request1.id + "2"
-    model_id2 = list(filter(lambda model_id: model_id != model_id1, server.models_served))[0]
+    model_id2 = list(
+        filter(lambda model_id: model_id != model_id1, server.models_served)
+    )[0]
     assert model_id2 is not None
-    request2.arrival_rate = (1 - request1.arrival_rate / server.profiling_data[model_id1].max_throughput) * server.profiling_data[model_id2].max_throughput
+    request2.arrival_rate = (
+        1 - request1.arrival_rate / server.profiling_data[model_id1].max_throughput
+    ) * server.profiling_data[model_id2].max_throughput
     assert system.add_request(request2)
-    session_config2 = SessionConfiguration(request_id=request2.id, server_id=server_id, model_id=model_id2)
+    session_config2 = SessionConfiguration(
+        request_id=request2.id, server_id=server_id, model_id=model_id2
+    )
 
     # Test
     assert system.set_session(session_config2)
@@ -311,22 +341,34 @@ def test_throughput_constraint_2_requests_different_model_invalid(
     # Setup
     system, session_config1 = example_valid_session_setup
     assert system.set_session(session_config1)
-    request_id1, model_id1, server_id = session_config1.request_id, session_config1.model_id, session_config1.server_id
+    request_id1, model_id1, server_id = (
+        session_config1.request_id,
+        session_config1.model_id,
+        session_config1.server_id,
+    )
     request1 = system.requests[request_id1]
     server = system.servers[server_id]
     request2 = copy.deepcopy(request1)
     request2.id = request1.id + "2"
-    model_id2 = list(filter(lambda model_id: model_id != model_id1, server.models_served))[0]
+    model_id2 = list(
+        filter(lambda model_id: model_id != model_id1, server.models_served)
+    )[0]
     assert model_id2 is not None
-    request2.arrival_rate = (1 - request1.arrival_rate / server.profiling_data[model_id1].max_throughput) * server.profiling_data[model_id2].max_throughput + 1.0
+    request2.arrival_rate = (
+        1 - request1.arrival_rate / server.profiling_data[model_id1].max_throughput
+    ) * server.profiling_data[model_id2].max_throughput + 1.0
     assert system.add_request(request2)
-    session_config2 = SessionConfiguration(request_id=request2.id, server_id=server_id, model_id=model_id2)
+    session_config2 = SessionConfiguration(
+        request_id=request2.id, server_id=server_id, model_id=model_id2
+    )
 
     # Test
     assert not system.set_session(session_config2)
 
 
-def test_accuracy_constraint(example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]):
+def test_accuracy_constraint(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
     # Setup
     system, session_config = example_valid_session_setup
     request_id, model_id = session_config.request_id, session_config.model_id
@@ -336,3 +378,37 @@ def test_accuracy_constraint(example_valid_session_setup: Tuple[ServingSystem, S
 
     # Test
     assert not system.set_session(session_config)
+
+
+# METRICS TESTS
+def test_metrics_1_request(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
+    # Setup
+    system, session_config = example_valid_session_setup
+    request_id, model_id, server_id = (
+        session_config.request_id,
+        session_config.model_id,
+        session_config.server_id,
+    )
+    request, model, server = (
+        system.requests[request_id],
+        system.models[model_id],
+        system.servers[server_id],
+    )
+
+    # Test
+    assert request_id not in system.sessions
+    assert request_id not in system.metrics
+    assert system.set_session(session_config)
+    assert request_id in system.metrics
+    metrics = system.metrics[request_id]
+    assert metrics.accuracy == model.accuracy
+    expected_latency = (
+        request.propagation_delay
+        + estimate_transmission_latency(model.input_size, request.transmission_speed)
+        + server.serving_latency[model_id]
+    )
+    assert metrics.latency == expected_latency
+    expected_cost = system.cost_calc.session_cost(metrics)
+    assert metrics.cost == expected_cost

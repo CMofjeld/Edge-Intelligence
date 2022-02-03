@@ -296,7 +296,10 @@ class ServingSystem:
             "servers": [asdict(server) for server in self.servers.values()],
             "models": [asdict(model) for model in self.models.values()],
             "sessions": [asdict(session) for session in self.sessions.values()],
-            "metrics": {request_id: asdict(metrics) for request_id, metrics in self.metrics.items()} # TODO remove
+            "metrics": {
+                request_id: asdict(metrics)
+                for request_id, metrics in self.metrics.items()
+            },  # TODO remove
         }
         return json_dict
 
