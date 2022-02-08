@@ -6,17 +6,37 @@ from controller.serving_system import ServingSystem
 from controller.serving_dataclasses import SessionConfiguration, SessionRequest
 from controller.request_sorter import RequestSorter
 from controller.solver_base_class import ServingSolver
-from controller.session_config_sorter import SessionConfigSorter
+from controller.session_config_ranker import SessionConfigRanker
 
 
-class GreedySolver(ServingSolver):
+class GreedyOnlineAlgorithm:
+    """Finds the best configuration for a given request, based on the provided ranker."""
+
+    def __init__(self, config_ranker: SessionConfigRanker) -> None:
+        self._config_ranker = config_ranker
+
+    def best_config(self, request: SessionRequest, serving_system: ServingSystem) -> SessionConfiguration:
+        """Return best valid configuration for the given request, if it exists."""
+        best_util = float("-inf")
+        best_config = None
+        for server_id in serving_system.servers:
+            for model_id in serving_system.servers[server_id].models_served:
+                session_config = SessionConfiguration(request.id, server_id, model_id)
+                if serving_system.is_valid_config(session_config):
+                    cur_util = self._config_ranker.rank(session_config, serving_system)
+                    if cur_util > best_util:
+                        best_util = cur_util
+                        best_config = session_config
+        return best_config
+
+
+class GreedyOfflineAlgorithm(ServingSolver):
     """Solver that uses a greedy algorithm to solve inference serving problems."""
 
-    def __init__(self, request_sorter: RequestSorter, config_sorter: SessionConfigSorter) -> None:
+    def __init__(self, request_sorter: RequestSorter, online_algo: GreedyOnlineAlgorithm) -> None:
         super().__init__()
         self._request_sorter = request_sorter
-        self._config_sorter = config_sorter
-
+        self._online_algo = online_algo
 
     def solve(self, serving_system: ServingSystem) -> Dict[str, SessionConfiguration]:
         """Find a solution to the inference serving problem with the specified parameters.
@@ -38,15 +58,9 @@ class GreedySolver(ServingSolver):
         # Assign routes one-by-one
         for request in sorted_requests:
             # Find the configuration that yields the best cost for this request
-            valid_configs = []
-            for server_id in serving_system.servers:
-                for model_id in serving_system.servers[server_id].models_served:
-                    session_config = SessionConfiguration(request.id, server_id, model_id)
-                    if serving_system.is_valid_config(session_config):
-                        valid_configs.append(session_config)
-            if valid_configs:
-                sorted_configs = self._config_sorter.sort(valid_configs, serving_system)
-                serving_system.set_session(sorted_configs[0])
+            best_config = self._online_algo.best_config(request, serving_system)
+            if best_config:
+                serving_system.set_session(best_config)
 
         # Copy the solution
         solution = copy.deepcopy(serving_system.sessions)
@@ -58,8 +72,12 @@ class GreedySolver(ServingSolver):
         return solution
 
 
-class GreedyBacktrackingSolver(GreedySolver):
+class GreedyBacktrackingSolver():
     """Solver that uses a greedy algorithm plus backtracking to solve inference serving problems."""
+
+    def __init__(self, request_sorter: RequestSorter, config_ranker: SessionConfigRanker) -> None:
+        self._request_sorter = request_sorter
+        self._config_ranker = config_ranker
 
     def solve(self, serving_system: ServingSystem) -> Dict[str, SessionConfiguration]:
         """Find a solution to the inference serving problem with the specified parameters.
@@ -102,7 +120,7 @@ class GreedyBacktrackingSolver(GreedySolver):
                 session_config = SessionConfiguration(request.id, server_id, model_id)
                 if serving_system.is_valid_config(session_config):
                     valid_configs.append(session_config)
-        sorted_configs = self._config_sorter.sort(valid_configs, serving_system)
+        sorted_configs = sorted(valid_configs, key=lambda config: self._config_ranker.rank(config, serving_system))
 
         # Iterate through the list and stop after the first success
         for session_config in sorted_configs:
