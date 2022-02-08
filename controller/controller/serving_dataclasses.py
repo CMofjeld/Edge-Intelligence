@@ -18,6 +18,7 @@ class ModelBase:
 
     accuracy: float = None  # accuracy score associated with the model
     input_size: int = None  # data size of an individual input to the model
+    dims: List[int] = field(default_factory=list) # height and width expected by model
 
 
 @dataclass
@@ -57,6 +58,7 @@ class ModelProfilingData:
 class ServerBase:
     """Parameters of a worker server."""
 
+    url: str = None # URL to access the server at
     models_served: List[
         str
     ] = field(default_factory=list)  # set of model IDs for the models offered by the server
