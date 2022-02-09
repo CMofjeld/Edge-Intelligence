@@ -412,3 +412,20 @@ def test_metrics_1_request(
     assert metrics.latency == expected_latency
     expected_cost = system.cost_calc.session_cost(metrics)
     assert metrics.cost == expected_cost
+
+
+# JSON TESTS
+def test_json(example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]):
+    # Setup
+    system, session_config = example_valid_session_setup
+    assert system.set_session(session_config)
+    system2 = ServingSystem(cost_calc=LESumOfSquaresCost(latency_weight=1.0))
+
+    # Test
+    json_dict = system.json()
+    system2.load_from_json(json_dict)
+    assert system.requests == system2.requests
+    assert system.models == system2.models
+    assert system.servers == system2.servers
+    assert system.sessions == system2.sessions
+    assert system.metrics == system2.metrics
