@@ -323,7 +323,10 @@ class ServingSystem:
             for session_dict in json_dict["sessions"]
         ]
         for session in sessions:
-            self.set_session(session)
+            request_id = session.request_id
+            self.sessions[request_id] = session
+        for request_id, metrics_dict in json_dict["metrics"].items():
+            self.metrics[request_id] = SessionMetrics(**metrics_dict)
 
 
 def estimate_model_serving_latency(lamda: float, alpha: float, beta: float) -> float:
