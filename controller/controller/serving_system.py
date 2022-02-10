@@ -352,7 +352,9 @@ def estimate_model_serving_latency(lamda: float, alpha: float, beta: float) -> f
     phi1 = (3 / 2) * (beta / (1 - lamda * alpha)) + (alpha / 2) * (
         (lamda * alpha + 2) / (1 - (lamda ** 2) * (alpha ** 2))
     )
-    return min(phi0, phi1)
+    # Make sure latency is set to zero when arrival rate is zero
+    fix_zero = 1000.0 * lamda
+    return min(min(phi0, phi1), fix_zero)
 
 
 def estimate_transmission_latency(
