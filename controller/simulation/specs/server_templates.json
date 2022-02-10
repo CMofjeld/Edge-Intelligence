@@ -36,7 +36,7 @@
                 "efficientd1": {
                     "alpha": 0.39,
                     "beta": 0.11,
-                    "max_throughput": 3.0
+                    "max_throughput": 2.5
                 }
             }
         }
