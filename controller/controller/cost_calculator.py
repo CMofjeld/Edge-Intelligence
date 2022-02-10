@@ -24,8 +24,8 @@ class LESumOfSquaresCost(ABC):
     def session_cost(self, session_metrics: SessionMetrics) -> float:
         """Return the weighted sum of the squared latency and error rate."""
         return (
-            self.latency_weight * session_metrics.latency ** 2
-            + (1 - session_metrics.accuracy) ** 2
+            self.latency_weight * session_metrics.latency**2
+            + (1 - self.latency_weight) * (1 - session_metrics.accuracy) ** 2
         )
 
 
@@ -40,5 +40,5 @@ class LESumCost(ABC):
     def session_cost(self, session_metrics: SessionMetrics) -> float:
         """Return the weighted sum of the latency and error rate."""
         return self.latency_weight * session_metrics.latency + (
-            1 - session_metrics.accuracy
-        )
+            1 - self.latency_weight
+        ) * (1 - session_metrics.accuracy)
