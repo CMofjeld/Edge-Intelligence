@@ -1,0 +1,71 @@
+[
+    {
+        "weight": 1,
+        "template": {
+            "models_served": [
+                "mobilenet"
+            ],
+            "profiling_data": {
+                "mobilenet": {
+                    "alpha": 0.27,
+                    "beta": 0.06,
+                    "max_throughput": 3.0
+                }
+            }
+        }
+    },
+    {
+        "weight": 1,
+        "template": {
+            "models_served": [
+                "mobilenet",
+                "efficientd0",
+                "efficientd1"
+            ],
+            "profiling_data": {
+                "mobilenet": {
+                    "alpha": 0.1063,
+                    "beta": 0.075,
+                    "max_throughput": 3.0
+                },
+                "efficientd0": {
+                    "alpha": 0.23,
+                    "beta": 0.07,
+                    "max_throughput": 3.0
+                },
+                "efficientd1": {
+                    "alpha": 0.39,
+                    "beta": 0.11,
+                    "max_throughput": 3.0
+                }
+            }
+        }
+    },
+    {
+        "weight": 1,
+        "template": {
+            "models_served": [
+                "mobilenet",
+                "efficientd0",
+                "efficientd1"
+            ],
+            "profiling_data": {
+                "mobilenet": {
+                    "alpha": 0.103,
+                    "beta": 0.057,
+                    "max_throughput": 3.0
+                },
+                "efficientd0": {
+                    "alpha": 0.19,
+                    "beta": 0.05,
+                    "max_throughput": 3.0
+                },
+                "efficientd1": {
+                    "alpha": 0.29,
+                    "beta": 0.06,
+                    "max_throughput": 3.0
+                }
+            }
+        }
+    }
+]

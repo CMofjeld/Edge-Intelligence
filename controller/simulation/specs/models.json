@@ -1,0 +1,17 @@
+[
+    {
+        "id": "mobilenet",
+        "accuracy": 0.222,
+        "input_size": 2.0
+    },
+    {
+        "id": "efficientd0",
+        "accuracy": 0.336,
+        "input_size": 5.0
+    },
+    {
+        "id": "efficientd1",
+        "accuracy": 0.384,
+        "input_size": 8.0
+    }
+]
