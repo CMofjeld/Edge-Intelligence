@@ -20,16 +20,17 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-from brute_force_solver import BruteForceSolver, sum_squared_latency_and_error
-from cost_calculator import LESumOfSquaresCost, LESumCost
-from greedy_solver import GreedyBacktrackingSolver, GreedySolver
-from request_sorter import (
+from controller.brute_force_solver import BruteForceSolver, sum_squared_latency_and_error
+from controller.cost_calculator import LESumOfSquaresCost, LESumCost
+from controller.greedy_solver import GreedyBacktrackingSolver, GreedyOfflineAlgorithm, GreedyOnlineAlgorithm
+from solver.ampl_solver import AMPLSolver
+from controller.request_sorter import (
     ARRequestSorter,
     ASRequestSorter,
     RandomRequestSorter,
     RRequestSorter,
 )
-from serving_dataclasses import (
+from controller.serving_dataclasses import (
     Model,
     ModelProfilingData,
     Server,
@@ -38,8 +39,8 @@ from serving_dataclasses import (
     SessionMetrics,
     SessionRequest,
 )
-from serving_system import ServingSystem
-from session_config_sorter import LCFConfigSorter, RandomConfigSorter, GCFConfigSorter
+from controller.serving_system import ServingSystem
+from controller.session_config_ranker import LCFConfigRanker, GCFConfigRanker, RandomConfigRanker
 
 
 def record_solution(solution: Dict[str, SessionConfiguration], filepath: str):
@@ -142,12 +143,17 @@ def main():
     """Run experiments defined by solvers and data_files."""
     # Define solvers to test
     solvers = {
-        # "optimal": BruteForceSolver(),
+        "optimal": BruteForceSolver(),
+        "ampl": AMPLSolver(
+            data_file_path="inference-serving.dat",
+            result_file_path="solver-results.txt",
+            script_file_path="inference-serving.run",
+            solver_path="/opt/ampl.linux-intel64/ampl"),
         # "greedy_random": GreedySolver(RandomRequestSorter(), LCFConfigSorter()),
         # "greedy_sorted": GreedySolver(ASRequestSorter(), LCFConfigSorter()),
-        "greedy_ar_lcf": GreedySolver(ARRequestSorter(), LCFConfigSorter()),
-        "greedy_ar_gcf": GreedySolver(ARRequestSorter(), GCFConfigSorter()),
-        #"greedy_r_lcf": GreedySolver(RRequestSorter(), LCFConfigSorter()),
+        # "greedy_ar_lcf": GreedyOfflineAlgorithm(ARRequestSorter(), GreedyOnlineAlgorithm(LCFConfigRanker())),
+        # "greedy_ar_gcf": GreedyOfflineAlgorithm(ARRequestSorter(), GreedyOnlineAlgorithm(GCFConfigRanker())),
+        # "greedy_r_lcf": GreedySolver(RRequestSorter(), LCFConfigSorter()),
         # "greedy_backtracking_as_lcf": GreedyBacktrackingSolver(ASRequestSorter(), LCFConfigSorter()),
         # "greedy_backtracking_ar_lcf": GreedyBacktrackingSolver(ARRequestSorter(), LCFConfigSorter()),
     }
@@ -162,15 +168,16 @@ def main():
     }
 
     # Define cost
-    cost_calc = LESumCost(latency_weight=1.0)
+    cost_calc = LESumCost(latency_weight=0.5)
     cost_calcs = {
         #"LESum": LESumCost(latency_weight=1.0),
-        "LESumOfSquares": LESumOfSquaresCost(latency_weight=1.0)
+        "LESumOfSquares": LESumOfSquaresCost(latency_weight=0.5)
     }
 
     # Construct system models
     if data_files:
         # Parse the data files
+        print("Parsing data files...")
         # system_models = {instance_name: parse_data_file(data_file_path=data_file_path) for instance_name, data_file_path in data_files.items()}
         system_models = {}
         for instance_name, data_file_path in data_files.items():
@@ -179,6 +186,7 @@ def main():
                 json_dict = json.loads(json_file.read())
             system_model.load_from_json(json_dict)
             system_models[instance_name] = system_model
+        print("Data files parsed")
     else:
         # Define models
         models = [
@@ -227,10 +235,12 @@ def main():
             ),
         ]
         server_weights = [50, 25, 25]
-        num_servers = 5
+        num_servers = 8
         num_problem_instances = 5
         system_models = {}
+        print(f"Generating {num_problem_instances} problem instances...")
         for instance_num in range(1, num_problem_instances + 1):
+            print(f"{instance_num}/{num_problem_instances}")
             servers = []
             for ID in range(1, num_servers + 1):
                 server_spec = random.choices(server_specs, server_weights)[0]
@@ -258,7 +268,7 @@ def main():
             min_speed = 100
             max_speed = 500
             backtracking_solver = GreedyBacktrackingSolver(
-                ARRequestSorter(), LCFConfigSorter()
+                ARRequestSorter(), LCFConfigRanker()
             )
             request_id_num = 0
             while True:
@@ -277,13 +287,14 @@ def main():
 
                 # Add it to the model and check if system is overloaded using solver
                 system_model.add_request(new_request=new_request)
-                # print(f"Adding new request: {new_request}")
-                # print("Evaluating...")
+                print(f"Adding new request: {new_request}")
+                print("Evaluating...")
                 if not backtracking_solver.solve(serving_system=system_model):
                     # System is overloaded - remove the request and stop generating new ones
                     system_model.remove_request(request_id=new_request.id)
                     break
             system_models[str(instance_num)] = system_model
+        print("Problem instances generated")
 
     # Run experiments
     metrics = {
@@ -320,6 +331,8 @@ def main():
     for instance_name, system_model in system_models.items():
         for solver_name, solver in solvers.items():
             for cost_name, cost_calc in cost_calcs.items():
+                print(f"Problem: {instance_name}, Solver: {solver_name}, Cost: {cost_name}")
+
                 # Reset model, just in case
                 system_model.clear_all_sessions()
 
