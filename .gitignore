@@ -158,3 +158,8 @@ cython_debug/
 profiler/profiler/models/*
 profiler/profiler/efficientdet/*
 simulation/models/*
+controller/simulation/solutions/*
+controller/simulation/metrics/*
+controller/simulation/instances/*
+controller/solver/*.dat
+controller/solver/*.txt
