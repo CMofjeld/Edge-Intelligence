@@ -24,7 +24,7 @@ from controller.serving_system import (
 def example_request() -> SessionRequest:
     return SessionRequest(
         arrival_rate=1.6,
-        min_accuracy=20.0,
+        min_accuracy=0.2,
         transmission_speed=400.0,
         propagation_delay=1e-2,
         id="example_request",
@@ -127,7 +127,7 @@ def example_system() -> ServingSystem:
         ),
     ]
     return ServingSystem(
-        cost_calc=LESumOfSquaresCost(latency_weight=1.0), models=models, servers=servers
+        cost_calc=LESumOfSquaresCost(latency_weight=0.5), models=models, servers=servers
     )
 
 
@@ -419,7 +419,7 @@ def test_json(example_valid_session_setup: Tuple[ServingSystem, SessionConfigura
     # Setup
     system, session_config = example_valid_session_setup
     assert system.set_session(session_config)
-    system2 = ServingSystem(cost_calc=LESumOfSquaresCost(latency_weight=1.0))
+    system2 = ServingSystem(cost_calc=LESumOfSquaresCost(latency_weight=0.5))
 
     # Test
     json_dict = system.json()
