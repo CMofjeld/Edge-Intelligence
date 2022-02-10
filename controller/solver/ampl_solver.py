@@ -1,7 +1,7 @@
 """Definition of solver class that uses AMPL to solve inference serving problems."""
-from ampl_interface import create_data_file, run_solver, parse_solver_results
-from solver_base_class import ServingSolver
-from serving_system import ServingSystem, SessionConfiguration
+from solver.ampl_interface import create_data_file, run_solver, parse_solver_results
+from controller.solver_base_class import ServingSolver
+from controller.serving_system import ServingSystem, SessionConfiguration
 from typing import Dict
 
 class AMPLSolver(ServingSolver):

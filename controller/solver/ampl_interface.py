@@ -2,8 +2,9 @@
 
 import os
 from typing import Dict, List, TextIO
+from urllib import request
 
-from serving_system import (
+from controller.serving_system import (
     Model,
     ModelProfilingData,
     Server,
@@ -11,6 +12,7 @@ from serving_system import (
     SessionConfiguration,
     SessionRequest,
 )
+from controller.cost_calculator import LESumOfSquaresCost
 
 
 def run_solver(solver_path: str, script_path: str) -> bool:
@@ -46,7 +48,7 @@ def parse_solver_results(result_file_path: str) -> Dict[str, SessionConfiguratio
         result_file_path (str): path to text file output by the solver script
 
     Returns:
-        Dict[str, str]: dictionary mapping request names to session configurations
+        Dict[str, SessionConfiguration]: dictionary mapping request names to session configurations
     """
     # Validate args
     if not os.path.exists(result_file_path):
@@ -78,8 +80,8 @@ def parse_solver_results(result_file_path: str) -> Dict[str, SessionConfiguratio
                     break  # end of section containing I
                 else:
                     request_id = line_elements[0]
-                    model_id = line_elements[1]
-                    server_id = line_elements[2]
+                    server_id = line_elements[1]
+                    model_id = line_elements[2]
                     indicator = line_elements[-1]
                     if indicator == "1":
                         session_configurations[request_id] = SessionConfiguration(
@@ -200,11 +202,12 @@ def create_data_file(data_file_path: str, serving_system: ServingSystem) -> None
         write_section_to_data_file(data_file, "set N:=", server_ids)
 
         # Models served
-        models_served = []
         for server_id in server_ids:
-            for model_id in serving_system.servers[server_id].models_served:
-                models_served.append(", ".join([model_id, server_id]))
-        write_section_to_data_file(data_file, "set SERVED:=", models_served)
+            write_section_to_data_file(data_file, f"set SERVED[{server_id}]:=", serving_system.servers[server_id].models_served)
+
+        # Gamma
+        gamma = str(serving_system.cost_calc.latency_weight)
+        write_section_to_data_file(data_file, "param gamma:=", [gamma])
 
         # Arrival rates
         arrival_rates = []
@@ -227,6 +230,13 @@ def create_data_file(data_file_path: str, serving_system: ServingSystem) -> None
             accuracy_constraints.append(" ".join([request_id, accuracy_constraint]))
         write_section_to_data_file(data_file, "param min_accuracy:=", accuracy_constraints)
 
+        # Propagation delays
+        prop_delays = []
+        for request_id in request_ids:
+            prop_delay = str(serving_system.requests[request_id].propagation_delay)
+            prop_delays.append(" ".join([request_id, prop_delay]))
+        write_section_to_data_file(data_file, "param prop_delay:=", prop_delays)
+
         # Model accuracy scores
         accuracy_scores = []
         for model_id in model_ids:
@@ -246,7 +256,7 @@ def create_data_file(data_file_path: str, serving_system: ServingSystem) -> None
         for server_id in server_ids:
             for model_id in serving_system.servers[server_id].models_served:
                 max_throughput = str(serving_system.servers[server_id].profiling_data[model_id].max_throughput)
-                max_throughputs.append(" ".join([model_id, server_id, max_throughput]))
+                max_throughputs.append(" ".join([server_id, model_id, max_throughput]))
         write_section_to_data_file(data_file, "param max_throughput:=", max_throughputs)
 
         # Alphas
@@ -254,7 +264,7 @@ def create_data_file(data_file_path: str, serving_system: ServingSystem) -> None
         for server_id in server_ids:
             for model_id in serving_system.servers[server_id].models_served:
                 alpha = str(serving_system.servers[server_id].profiling_data[model_id].alpha)
-                alphas.append(" ".join([model_id, server_id, alpha]))
+                alphas.append(" ".join([server_id, model_id, alpha]))
         write_section_to_data_file(data_file, "param alpha:=", alphas)
 
         # Betas
@@ -262,7 +272,7 @@ def create_data_file(data_file_path: str, serving_system: ServingSystem) -> None
         for server_id in server_ids:
             for model_id in serving_system.servers[server_id].models_served:
                 beta = str(serving_system.servers[server_id].profiling_data[model_id].beta)
-                betas.append(" ".join([model_id, server_id, beta]))
+                betas.append(" ".join([server_id, model_id, beta]))
         write_section_to_data_file(data_file, "param beta:=", betas)
 
 def write_section_to_data_file(data_file: TextIO, section_header: str, lines: List[str], section_terminator: str = ";") -> None:
@@ -280,3 +290,77 @@ def write_section_to_data_file(data_file: TextIO, section_header: str, lines: Li
     data_file.write(section_header + "\n")
     data_file.writelines([line + "\n" for line in lines])
     data_file.write(section_terminator + "\n\n")
+
+models = [
+    Model(id="mobilenet", accuracy=0.222, input_size=2.0),
+    Model(id="efficientd0", accuracy=0.336, input_size=5.0),
+    Model(id="efficientd1", accuracy=0.384, input_size=8.0),
+]
+requests = [SessionRequest(
+    arrival_rate=1.6,
+    min_accuracy=0.2,
+    transmission_speed=400.0,
+    propagation_delay=1e-2,
+    id="example_request",
+)]
+servers = [
+    Server(
+        models_served=["mobilenet"],
+        profiling_data={
+            "mobilenet": ModelProfilingData(
+                alpha=0.27, beta=0.06, max_throughput=3
+            ),
+        },
+        id="nano1",
+        serving_latency={model_id: 0.0 for model_id in ["mobilenet"]},
+        arrival_rate={model_id: 0.0 for model_id in ["mobilenet"]},
+    ),
+    Server(
+        models_served=["mobilenet", "efficientd0", "efficientd1"],
+        profiling_data={
+            "mobilenet": ModelProfilingData(
+                alpha=0.1063, beta=0.075, max_throughput=3
+            ),
+            "efficientd0": ModelProfilingData(
+                alpha=0.23, beta=0.07, max_throughput=3
+            ),
+            "efficientd1": ModelProfilingData(
+                alpha=0.39, beta=0.11, max_throughput=3
+            ),
+        },
+        id="nx1",
+        serving_latency={
+            model_id: 0.0
+            for model_id in ["mobilenet", "efficientd0", "efficientd1"]
+        },
+        arrival_rate={
+            model_id: 0.0
+            for model_id in ["mobilenet", "efficientd0", "efficientd1"]
+        },
+    ),
+    Server(
+        models_served=["mobilenet", "efficientd0", "efficientd1"],
+        profiling_data={
+            "mobilenet": ModelProfilingData(
+                alpha=0.103, beta=0.057, max_throughput=3
+            ),
+            "efficientd0": ModelProfilingData(
+                alpha=0.19, beta=0.05, max_throughput=3
+            ),
+            "efficientd1": ModelProfilingData(
+                alpha=0.29, beta=0.06, max_throughput=3
+            ),
+        },
+        id="agx1",
+        serving_latency={
+            model_id: 0.0
+            for model_id in ["mobilenet", "efficientd0", "efficientd1"]
+        },
+        arrival_rate={
+            model_id: 0.0
+            for model_id in ["mobilenet", "efficientd0", "efficientd1"]
+        },
+    ),
+]
+serving_system = ServingSystem(cost_calc=LESumOfSquaresCost(latency_weight=0.5), models=models, requests=requests, servers=servers)
+create_data_file(data_file_path="test.dat", serving_system=serving_system)

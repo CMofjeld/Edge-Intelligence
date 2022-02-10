@@ -7,10 +7,14 @@ RUN cd /opt/ && \
     tar xzf ampl.linux64.tgz && \
     rm ampl.linux64.tgz
 
-# Install Python
+# Install Python and pip
 RUN apt-get update -y && \
-    apt-get install -y python3
+    apt-get install -y python3 python3-pip && \
+    python3 -m pip install --upgrade pip setuptools wheel
 
 # Copy app files over
-ADD ./solver /usr/src/app
+ADD ./ /usr/src/app
 WORKDIR /usr/src/app
+
+# Install controller package
+RUN python3 -m pip install .

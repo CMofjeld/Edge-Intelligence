@@ -1,0 +1,9 @@
+reset;
+model /usr/src/app/inference-serving2.mod;
+data /usr/src/app/inference-serving.dat;
+solve;
+option display_1col 100;
+option omit_zero_rows 1;
+display solve_result > /usr/src/app/solver-results.txt;
+display I >> /usr/src/app/solver-results.txt;
+display Cost >> /usr/src/app/solver-results.txt;
