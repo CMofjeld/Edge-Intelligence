@@ -100,8 +100,6 @@ class ServingSystem:
         """Clear all session configurations and reset related tables to default values."""
         self.sessions = {}
         self.metrics = {}
-        # self.requests_served_by = {server_id: set() for server_id in self.servers}
-        # self.arrival_rates = {server_id: 0.0 for server_id in self.servers}
         for server in self.servers.values():
             server.arrival_rate = {model_id: 0.0 for model_id in server.models_served}
             server.serving_latency = {
@@ -299,7 +297,7 @@ class ServingSystem:
             "metrics": {
                 request_id: asdict(metrics)
                 for request_id, metrics in self.metrics.items()
-            },  # TODO remove
+            },
         }
         return json_dict
 
