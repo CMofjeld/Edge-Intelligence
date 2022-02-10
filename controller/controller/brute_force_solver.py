@@ -14,6 +14,10 @@ def sum_squared_latency_and_error(serving_system: ServingSystem) -> float:
         for metric in serving_system.metrics.values()
     )
 
+def total_cost(serving_system: ServingSystem) -> float:
+    """Return the sum of the cost for all sessions."""
+    return sum(metric.cost for metric in serving_system.metrics.values())
+
 
 class BruteForceSolver(ServingSolver):
     """Brute force solver for inference serving problem."""
@@ -22,7 +26,7 @@ class BruteForceSolver(ServingSolver):
         self,
         evaluate_solution: Callable[
             [ServingSystem], float
-        ] = sum_squared_latency_and_error,
+        ] = total_cost,
     ) -> None:
         """Store function passed in for evaluating solutions and set default values for instance variables.
 
