@@ -2,7 +2,6 @@
 
 import os
 from typing import Dict, List, TextIO
-from urllib import request
 
 from controller.serving_system import (
     Model,
@@ -75,7 +74,7 @@ def parse_solver_results(result_file_path: str) -> Dict[str, SessionConfiguratio
 
             # Store output in session_configurations
             for line in result_file:
-                line_elements = line.strip().split(" ")
+                line_elements = line.strip().split()
                 if line_elements[0] == ";":
                     break  # end of section containing I
                 else:
@@ -230,13 +229,6 @@ def create_data_file(data_file_path: str, serving_system: ServingSystem) -> None
             accuracy_constraints.append(" ".join([request_id, accuracy_constraint]))
         write_section_to_data_file(data_file, "param min_accuracy:=", accuracy_constraints)
 
-        # Propagation delays
-        prop_delays = []
-        for request_id in request_ids:
-            prop_delay = str(serving_system.requests[request_id].propagation_delay)
-            prop_delays.append(" ".join([request_id, prop_delay]))
-        write_section_to_data_file(data_file, "param prop_delay:=", prop_delays)
-
         # Model accuracy scores
         accuracy_scores = []
         for model_id in model_ids:
@@ -300,7 +292,6 @@ requests = [SessionRequest(
     arrival_rate=1.6,
     min_accuracy=0.2,
     transmission_speed=400.0,
-    propagation_delay=1e-2,
     id="example_request",
 )]
 servers = [
