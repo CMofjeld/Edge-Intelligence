@@ -214,7 +214,8 @@ def main():
                 transmission_speed=random.uniform(
                     request_specs.min_transmission_speed,
                     request_specs.max_transmission_speed,
-                )
+                ),
+                max_latency=float("inf") # placeholder
             )
 
             # Choose a random route
@@ -255,7 +256,14 @@ def main():
                 del available_routes[server_id]
 
         if successful:
+            # Fill in the max_latency members
+            for request in serving_system.requests.values():
+                request.max_latency = serving_system.metrics[request.id].latency + 0.001
+
+            # Clear the sessions
             serving_system.clear_all_sessions()
+
+            # Record the instance
             problem_instances.append(serving_system.json())
             remaining -= 1
             print(f"{args.instances - remaining}/{args.instances}")

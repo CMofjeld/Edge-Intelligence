@@ -2,7 +2,5 @@
     "min_arrival_rate": 1.0,
     "max_arrival_rate": 2.0,
     "min_transmission_speed": 100.0,
-    "max_transmission_speed": 500.0,
-    "min_prop_delay": 0.001,
-    "max_prop_delay": 0.1
+    "max_transmission_speed": 500.0
 }

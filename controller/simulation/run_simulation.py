@@ -165,13 +165,13 @@ def main():
 
     # Define solvers to test
     solvers = {
-        # "optimal": BruteForceSolver(),
+        "optimal": BruteForceSolver(),
         # "ampl": AMPLSolver(
         #     data_file_path="../solver/inference-serving.dat",
         #     result_file_path="../solver/solver-results.txt",
         #     script_file_path="../solver/inference-serving.run",
         #     solver_path="/opt/ampl.linux-intel64/ampl"),
-        # "online": GreedyOfflineAlgorithm(RandomRequestSorter(), GreedyOnlineAlgorithm(LCFConfigRanker())),
+        "online": GreedyOfflineAlgorithm(RandomRequestSorter(), GreedyOnlineAlgorithm(LCFConfigRanker())),
         # "greedy_sorted": GreedySolver(ASRequestSorter(), LCFConfigSorter()),
         "offline": GreedyOfflineAlgorithm(ARRequestSorter(), GreedyOnlineAlgorithm(LCFConfigRanker())),
         # "greedy_ar_gcf": GreedyOfflineAlgorithm(ARRequestSorter(), GreedyOnlineAlgorithm(GCFConfigRanker())),
