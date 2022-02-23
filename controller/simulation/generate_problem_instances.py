@@ -4,7 +4,6 @@ import copy
 import dataclasses
 import json
 import random
-from textwrap import indent
 from typing import List
 
 from controller.cost_calculator import LESumOfSquaresCost
