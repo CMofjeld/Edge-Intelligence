@@ -115,28 +115,31 @@ class ServingSystem:
         elif request_id not in self.sessions:
             raise Exception("no session set for request ID")
 
-        request = self.requests[request_id]
         session = self.sessions[request_id]
         if request_id not in self.metrics:
             self.metrics[request_id] = SessionMetrics()
         metrics = self.metrics[request_id]
-        server_id, model_id = session.server_id, session.model_id
+        model_id = session.model_id
 
         # Update accuracy
         metrics.accuracy = self.models[model_id].accuracy
 
         # Update latency
+        metrics.latency = self.estimate_session_latency(session)
+
+        # Update cost
+        metrics.cost = self.cost_calc.session_cost(metrics)
+
+    def estimate_session_latency(self, session_config: SessionConfiguration) -> float:
+        """Estimate the end-to-end latency for a given session."""
+        request_id, server_id, model_id = session_config.request_id, session_config.server_id, session_config.model_id
+        request = self.requests[request_id]
         serving_latency = self.servers[server_id].serving_latency[model_id]
         input_size = self.models[model_id].input_size
         transmission_latency = estimate_transmission_latency(
             input_size, request.transmission_speed
         )
-        metrics.latency = (
-            serving_latency + transmission_latency + request.propagation_delay
-        )
-
-        # Update cost
-        metrics.cost = self.cost_calc.session_cost(metrics)
+        return serving_latency + transmission_latency
 
     def update_metrics_for_requests_served_by(self, server_id: str) -> None:
         """Recalculate the metrics for all requests served by a server."""
@@ -187,31 +190,58 @@ class ServingSystem:
             or (server_id not in self.servers)
         ):
             return False
+        request = self.requests[request_id]
+        server = self.servers[server_id]
+        model = self.models[model_id]
 
         # Check that server is actually serving the model
-        server = self.servers[server_id]
         if model_id not in server.models_served:
             return False
 
+        # Accuracy constraint
+        if request.min_accuracy > model.accuracy:
+            return False
+
+        # Check if request is currently served by the target server
+        restore_original = False # True if we need to restore original settings before returning
+        if request_id in server.requests_served:
+            restore_original = True
+            previous_model = self.sessions[request_id].model_id
+            server.arrival_rate[previous_model] -= request.arrival_rate
+
+        # Temporarily update arrival rate for target model to simplify calculations below
+        server.arrival_rate[model_id] += request.arrival_rate
+
         # Throughput constraint
-        request_rate = self.requests[request_id].arrival_rate
-        requested_capacity = (
-            request_rate / server.profiling_data[model_id].max_throughput
-        )
-        remaining_capacity = 1 - sum(
+        requested_capacity = sum(
             [
                 server.arrival_rate[model_id]
                 / server.profiling_data[model_id].max_throughput
                 for model_id in server.models_served
             ]
         )
-        if requested_capacity > remaining_capacity:
+        if requested_capacity > 1.0:
+            if restore_original:
+                server.arrival_rate[previous_model] += request.arrival_rate
+            server.arrival_rate[model_id] -= request.arrival_rate
             return False
 
-        # Accuracy constraint
-        min_accuracy = self.requests[request_id].min_accuracy
-        model_accuracy = self.models[model_id].accuracy
-        if min_accuracy > model_accuracy:
+        # Latency constraint
+        self.upate_serving_latency(server_id) # need to restore to original before returning
+        latency_violated = False
+        # Check other requests
+        for served_request in server.requests_served:
+            if self.estimate_session_latency(self.sessions[served_request]) > self.requests[served_request].max_latency:
+                latency_violated = True
+                break
+        # Check current request
+        if not latency_violated and self.estimate_session_latency(session_config) > request.max_latency:
+            latency_violated = True
+        if restore_original:
+            server.arrival_rate[previous_model] += request.arrival_rate
+        server.arrival_rate[model_id] -= request.arrival_rate
+        self.upate_serving_latency(server_id)
+        if latency_violated:
             return False
 
         # All constraints satisfied

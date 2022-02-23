@@ -1,9 +1,8 @@
 """Unit tests for ServingSystem."""
+import copy
 from typing import Tuple
 
-import copy
 import pytest
-
 from controller.cost_calculator import LESumOfSquaresCost
 from controller.serving_dataclasses import (
     Model,
@@ -26,7 +25,7 @@ def example_request() -> SessionRequest:
         arrival_rate=1.6,
         min_accuracy=0.2,
         transmission_speed=400.0,
-        propagation_delay=1e-2,
+        max_latency=1.0,
         id="example_request",
     )
 
@@ -140,6 +139,13 @@ def example_valid_session_setup(
     example_profiling_data: ModelProfilingData,
 ):
     example_request.min_accuracy = example_model.accuracy
+    example_request.max_latency = estimate_model_serving_latency(
+        example_request.arrival_rate,
+        example_profiling_data.alpha,
+        example_profiling_data.beta,
+    ) + estimate_transmission_latency(
+        example_model.input_size, example_request.transmission_speed
+    )
     example_server.models_served.append(example_model.id)
     example_profiling_data.max_throughput = example_request.arrival_rate
     example_server.profiling_data[example_model.id] = example_profiling_data
@@ -154,6 +160,51 @@ def example_valid_session_setup(
         model_id=example_model.id,
     )
     return example_system, session_config
+
+
+@pytest.fixture
+def example_valid_session_setup_2_requests(
+    example_system: ServingSystem,
+    example_request: SessionRequest,
+    example_server: Server,
+    example_model: Model,
+    example_profiling_data: ModelProfilingData,
+):
+    request1 = example_request
+    request1.min_accuracy = example_model.accuracy
+    latency = estimate_model_serving_latency(
+        example_request.arrival_rate,
+        example_profiling_data.alpha,
+        example_profiling_data.beta,
+    ) + estimate_transmission_latency(
+        example_model.input_size, example_request.transmission_speed
+    )
+    request1.max_latency = latency
+    request1.arrival_rate = request1.arrival_rate / 2
+    request2 = copy.deepcopy(request1)
+    request2.id = request1.id + "2"
+    example_server.models_served.append(example_model.id)
+    example_profiling_data.max_throughput = (
+        request1.arrival_rate + request2.arrival_rate
+    )
+    example_server.profiling_data[example_model.id] = example_profiling_data
+    example_server.arrival_rate[example_model.id] = 0.0
+    example_server.serving_latency[example_model.id] = 0.0
+    example_system.add_model(example_model)
+    example_system.add_request(request1)
+    example_system.add_request(request2)
+    example_system.add_server(example_server)
+    session_config1 = SessionConfiguration(
+        request_id=request1.id,
+        server_id=example_server.id,
+        model_id=example_model.id,
+    )
+    session_config2 = SessionConfiguration(
+        request_id=request2.id,
+        server_id=example_server.id,
+        model_id=example_model.id,
+    )
+    return example_system, session_config1, session_config2
 
 
 # ADD TESTS
@@ -251,26 +302,17 @@ def test_throughput_constraint_1_request(
 
 
 def test_throughput_constraint_2_requests_same_model_invalid(
-    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+    example_valid_session_setup_2_requests: Tuple[ServingSystem, SessionConfiguration]
 ):
     # Setup
-    system, session_config1 = example_valid_session_setup
+    system, session_config1, session_config2 = example_valid_session_setup_2_requests
     assert system.set_session(session_config1)
-    request_id1, model_id, server_id = (
-        session_config1.request_id,
-        session_config1.model_id,
-        session_config1.server_id,
-    )
-    request1 = system.requests[request_id1]
+    server_id, model_id = session_config1.server_id, session_config1.model_id
     server = system.servers[server_id]
-    request2 = copy.deepcopy(request1)
-    request2.id = request1.id + "2"
-    request2.arrival_rate = (
-        server.profiling_data[model_id].max_throughput - request1.arrival_rate + 1.0
-    )
-    assert system.add_request(request2)
-    session_config2 = SessionConfiguration(
-        request_id=request2.id, server_id=server_id, model_id=model_id
+    request1 = system.requests[session_config1.request_id]
+    request2 = system.requests[session_config2.request_id]
+    server.profiling_data[model_id].max_throughput = (
+        request1.arrival_rate + request2.arrival_rate - 0.01
     )
 
     # Test
@@ -278,57 +320,43 @@ def test_throughput_constraint_2_requests_same_model_invalid(
 
 
 def test_throughput_constraint_2_requests_same_model_valid(
-    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+    example_valid_session_setup_2_requests: Tuple[ServingSystem, SessionConfiguration]
 ):
     # Setup
-    system, session_config1 = example_valid_session_setup
+    system, session_config1, session_config2 = example_valid_session_setup_2_requests
     assert system.set_session(session_config1)
-    request_id1, model_id, server_id = (
-        session_config1.request_id,
-        session_config1.model_id,
-        session_config1.server_id,
-    )
-    request1 = system.requests[request_id1]
-    server = system.servers[server_id]
-    request2 = copy.deepcopy(request1)
-    request2.id = request1.id + "2"
-    request2.arrival_rate = (
-        server.profiling_data[model_id].max_throughput - request1.arrival_rate
-    )
-    assert system.add_request(request2)
-    session_config2 = SessionConfiguration(
-        request_id=request2.id, server_id=server_id, model_id=model_id
-    )
 
     # Test
     assert system.set_session(session_config2)
 
 
 def test_throughput_constraint_2_requests_different_model_valid(
-    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+    example_valid_session_setup_2_requests: Tuple[ServingSystem, SessionConfiguration]
 ):
     # Setup
-    system, session_config1 = example_valid_session_setup
-    assert system.set_session(session_config1)
-    request_id1, model_id1, server_id = (
-        session_config1.request_id,
-        session_config1.model_id,
-        session_config1.server_id,
-    )
-    request1 = system.requests[request_id1]
+    system, session_config1, session_config2 = example_valid_session_setup_2_requests
+    server_id, model_id1 = session_config1.server_id, session_config1.model_id
     server = system.servers[server_id]
-    request2 = copy.deepcopy(request1)
-    request2.id = request1.id + "2"
-    model_id2 = list(
-        filter(lambda model_id: model_id != model_id1, server.models_served)
-    )[0]
-    assert model_id2 is not None
-    request2.arrival_rate = (
-        1 - request1.arrival_rate / server.profiling_data[model_id1].max_throughput
-    ) * server.profiling_data[model_id2].max_throughput
-    assert system.add_request(request2)
-    session_config2 = SessionConfiguration(
-        request_id=request2.id, server_id=server_id, model_id=model_id2
+    model1 = system.models[model_id1]
+    model2 = copy.deepcopy(model1)
+    model2.id = model1.id + "2"
+    session_config2.model_id = model2.id
+    assert system.add_model(model2)
+    server.models_served.append(model2.id)
+    server.profiling_data[model2.id] = copy.deepcopy(server.profiling_data[model1.id])
+    server.arrival_rate[model2.id] = 0.0
+    server.serving_latency[model2.id] = 0.0
+    assert system.set_session(session_config1)
+    serving_latency = server.serving_latency[model1.id]
+    request1 = system.requests[session_config1.request_id]
+    request2 = system.requests[session_config2.request_id]
+    request1.max_latency = (
+        estimate_transmission_latency(model1.input_size, request1.transmission_speed)
+        + serving_latency * 2
+    )
+    request2.max_latency = (
+        estimate_transmission_latency(model2.input_size, request2.transmission_speed)
+        + serving_latency * 2
     )
 
     # Test
@@ -336,30 +364,35 @@ def test_throughput_constraint_2_requests_different_model_valid(
 
 
 def test_throughput_constraint_2_requests_different_model_invalid(
-    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+    example_valid_session_setup_2_requests: Tuple[ServingSystem, SessionConfiguration]
 ):
     # Setup
-    system, session_config1 = example_valid_session_setup
-    assert system.set_session(session_config1)
-    request_id1, model_id1, server_id = (
-        session_config1.request_id,
-        session_config1.model_id,
-        session_config1.server_id,
-    )
-    request1 = system.requests[request_id1]
+    system, session_config1, session_config2 = example_valid_session_setup_2_requests
+    server_id, model_id1 = session_config1.server_id, session_config1.model_id
     server = system.servers[server_id]
-    request2 = copy.deepcopy(request1)
-    request2.id = request1.id + "2"
-    model_id2 = list(
-        filter(lambda model_id: model_id != model_id1, server.models_served)
-    )[0]
-    assert model_id2 is not None
-    request2.arrival_rate = (
-        1 - request1.arrival_rate / server.profiling_data[model_id1].max_throughput
-    ) * server.profiling_data[model_id2].max_throughput + 1.0
-    assert system.add_request(request2)
-    session_config2 = SessionConfiguration(
-        request_id=request2.id, server_id=server_id, model_id=model_id2
+    model1 = system.models[model_id1]
+    model2 = copy.deepcopy(model1)
+    model2.id = model1.id + "2"
+    session_config2.model_id = model2.id
+    assert system.add_model(model2)
+    server.models_served.append(model2.id)
+    server.profiling_data[model2.id] = copy.deepcopy(server.profiling_data[model1.id])
+    server.arrival_rate[model2.id] = 0.0
+    server.serving_latency[model2.id] = 0.0
+    assert system.set_session(session_config1)
+    serving_latency = server.serving_latency[model1.id]
+    request1 = system.requests[session_config1.request_id]
+    request2 = system.requests[session_config2.request_id]
+    request1.max_latency = (
+        estimate_transmission_latency(model1.input_size, request1.transmission_speed)
+        + serving_latency * 2
+    )
+    request2.max_latency = (
+        estimate_transmission_latency(model2.input_size, request2.transmission_speed)
+        + serving_latency * 2
+    )
+    server.profiling_data[model_id1].max_throughput = (
+        request1.arrival_rate + request2.arrival_rate - 0.01
     )
 
     # Test
@@ -378,6 +411,88 @@ def test_accuracy_constraint(
 
     # Test
     assert not system.set_session(session_config)
+
+
+def test_latency_constraint_1_request(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
+    # Setup
+    system, session_config = example_valid_session_setup
+    assert session_config.request_id not in system.sessions
+    assert system.set_session(session_config)
+    assert session_config.request_id in system.sessions
+    assert system.sessions[session_config.request_id] == session_config
+    request_id = session_config.request_id
+    request = system.requests[request_id]
+    expected_latency = system.metrics[request_id].latency
+    system.clear_session(request_id)
+    assert request_id not in system.sessions
+    request.max_latency = expected_latency - 0.01
+
+    # Test
+    assert not system.set_session(session_config)
+
+
+def test_latency_constraint_same_model(
+    example_valid_session_setup_2_requests: Tuple[ServingSystem, SessionConfiguration]
+):
+    # Setup
+    system, session_config1, session_config2 = example_valid_session_setup_2_requests
+    assert system.set_session(session_config1)
+    assert system.set_session(session_config2)
+    request1 = system.requests[session_config1.request_id]
+    request2 = system.requests[session_config2.request_id]
+    expected_latency = system.metrics[request1.id].latency
+
+    # Test when existing request's latency is violated
+    system.clear_all_sessions()
+    request1.max_latency = expected_latency - 0.01
+    assert system.set_session(session_config1)
+    assert not system.set_session(session_config2)
+
+    # Test when new request's latency is violated
+    request1.max_latency = expected_latency
+    request2.max_latency = expected_latency - 0.01
+    assert not system.set_session(session_config2)
+
+
+def test_latency_constraint_different_model(
+    example_valid_session_setup_2_requests: Tuple[ServingSystem, SessionConfiguration]
+):
+    # Setup
+    system, session_config1, session_config2 = example_valid_session_setup_2_requests
+    server_id, model_id1 = session_config1.server_id, session_config1.model_id
+    server = system.servers[server_id]
+    model1 = system.models[model_id1]
+    model2 = copy.deepcopy(model1)
+    model2.id = model1.id + "2"
+    session_config2.model_id = model2.id
+    assert system.add_model(model2)
+    server.models_served.append(model2.id)
+    server.profiling_data[model2.id] = copy.deepcopy(server.profiling_data[model1.id])
+    server.arrival_rate[model2.id] = 0.0
+    server.serving_latency[model2.id] = 0.0
+    session_config2.model_id = model2.id
+    request1 = system.requests[session_config1.request_id]
+    request2 = system.requests[session_config2.request_id]
+    request1.max_latency *= 2
+    request2.max_latency *= 2
+    assert system.set_session(session_config1)
+    assert system.set_session(session_config2)
+    expected_latency1 = system.metrics[request1.id].latency
+    expected_latency2 = system.metrics[request2.id].latency
+    system.clear_all_sessions()
+
+    # Test when existing request's latency is violated
+    request1.max_latency = expected_latency1 - 0.01
+    request2.max_latency = expected_latency2
+    assert system.set_session(session_config1)
+    assert not system.set_session(session_config2)
+
+    # Test when new request's latency is violated
+    request1.max_latency = expected_latency1
+    request2.max_latency = expected_latency2 - 0.01
+    assert not system.set_session(session_config2)
 
 
 # METRICS TESTS
@@ -405,8 +520,7 @@ def test_metrics_1_request(
     metrics = system.metrics[request_id]
     assert metrics.accuracy == model.accuracy
     expected_latency = (
-        request.propagation_delay
-        + estimate_transmission_latency(model.input_size, request.transmission_speed)
+        estimate_transmission_latency(model.input_size, request.transmission_speed)
         + server.serving_latency[model_id]
     )
     assert metrics.latency == expected_latency
