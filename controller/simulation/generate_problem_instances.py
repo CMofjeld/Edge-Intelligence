@@ -26,8 +26,6 @@ class RequestSpecs:
     max_arrival_rate: float
     min_transmission_speed: float
     max_transmission_speed: float
-    min_prop_delay: float
-    max_prop_delay: float
 
 
 @dataclasses.dataclass
@@ -217,10 +215,7 @@ def main():
                 transmission_speed=random.uniform(
                     request_specs.min_transmission_speed,
                     request_specs.max_transmission_speed,
-                ),
-                propagation_delay=random.uniform(
-                    request_specs.min_prop_delay, request_specs.max_prop_delay
-                ),
+                )
             )
 
             # Choose a random route
@@ -264,6 +259,7 @@ def main():
             serving_system.clear_all_sessions()
             problem_instances.append(serving_system.json())
             remaining -= 1
+            print(f"{args.instances - remaining}/{args.instances}")
 
     # Save to file
     with open(args.output_file, "w") as output_file:
