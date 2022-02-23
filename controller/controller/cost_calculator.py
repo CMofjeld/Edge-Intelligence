@@ -29,6 +29,14 @@ class LESumOfSquaresCost(ABC):
         )
 
 
+class ESquaredCost(ABC):
+    """Defines the per-request cost as the squared error rate (E)."""
+
+    def session_cost(self, session_metrics: SessionMetrics) -> float:
+        """Return the weighted sum of the squared latency and error rate."""
+        return (1 - session_metrics.accuracy) ** 2
+
+
 class LESumCost(ABC):
     """Defines the per-request cost as the weighted sum of their latency (L) and error rate (E)."""
 
