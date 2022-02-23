@@ -85,9 +85,9 @@ class BruteForceSolver(ServingSolver):
                     if serving_system.set_session(session_configuration):
                         # Found a potentially viable configuration for the current request
                         self._solve_recursively(remaining_requests, serving_system)
-            # Put request back in the list of remaining requests and reset its configuration to empty
+                        serving_system.clear_session(request_id) # reset config for next attempt
+            # Put request back in the list of remaining requests
             remaining_requests.append(request_id)
-            serving_system.clear_session(request_id)
         else:
             # Base case - found a configuration for every request
             # Evaluate the current solution
