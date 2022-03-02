@@ -1,6 +1,7 @@
 """Definition of class that models the inference serving system as a whole."""
 from dataclasses import asdict
-from typing import Dict, List
+import math
+from typing import Dict, List, Tuple
 
 from controller.cost_calculator import CostCalculator
 from controller.serving_dataclasses import (
@@ -139,12 +140,12 @@ class ServingSystem:
         if server_id not in self.servers:
             raise Exception("invalid server ID")
         # Ensure serving latency is up-to-date
-        self.upate_serving_latency(server_id)
+        self.update_serving_latency(server_id)
         # Update the affected sessions
         for request_id in self.servers[server_id].requests_served:
             self.update_metrics(request_id)
 
-    def upate_serving_latency(self, server_id) -> None:
+    def update_serving_latency(self, server_id) -> None:
         if server_id not in self.servers:
             raise Exception("invalid server ID")
         server = self.servers[server_id]
@@ -219,7 +220,7 @@ class ServingSystem:
             return False
 
         # Latency constraint
-        self.upate_serving_latency(server_id) # need to restore to original before returning
+        self.update_serving_latency(server_id) # need to restore to original before returning
         latency_violated = False
         # Check other requests
         for served_request in server.requests_served:
@@ -232,7 +233,7 @@ class ServingSystem:
         if restore_original:
             server.arrival_rate[previous_model] += request.arrival_rate
         server.arrival_rate[model_id] -= request.arrival_rate
-        self.upate_serving_latency(server_id)
+        self.update_serving_latency(server_id)
         if latency_violated:
             return False
 
@@ -259,6 +260,27 @@ class ServingSystem:
     def slack_latency_request(self, request_id: str) -> float:
         """Return the difference between the request's latency SLO and its current expected latency."""
         return self.requests[request_id].max_latency - self.metrics[request_id].latency
+
+    def max_additional_fps_by_latency(self, server: Server, model_id: str) -> float:
+        """Return the maximum additional FPS a given model could receive without violating latency SLOs."""
+        # Find maximum latency for the given model
+        max_total_latency = server.serving_latency[model_id] + self.slack_latency_server(server)
+        profiling_data = server.profiling_data[model_id]
+        alpha, beta = profiling_data.alpha, profiling_data.beta
+        cur_fps = server.arrival_rate[model_id]
+        cur_model_latency = estimate_model_serving_latency(cur_fps, alpha, beta)
+        latency_from_others = server.serving_latency[model_id] - cur_model_latency
+        max_latency = max_total_latency - latency_from_others
+
+        # Find the maximum arrival rate for the model that will result in its max latency
+        try:
+            max_fps = arrival_rate_from_latency(max_latency, alpha, beta)
+        except ValueError:
+            return 0.0 # no arrival rate > 0 will result in a latency that low
+
+        # Return difference between max and current arrival rate
+        return max_fps - cur_fps
+
 
     def add_request(self, new_request: SessionRequest) -> bool:
         """Add a new session request to the table of requests.
@@ -405,3 +427,24 @@ def estimate_transmission_latency(
 ) -> float:
     """Estimate transmission latency for a given data size and transmission speed."""
     return input_size / transmission_speed
+
+def arrival_rate_from_latency(latency: float, alpha: float, beta: float) -> float:
+    """Solve the equations used to estimate a model's serving latency for arrival rate."""
+    # Coefficients for phi0
+    a0 = (2*latency*alpha**2)/(alpha + beta) + 2*alpha*beta
+    b0 = alpha + beta
+    c0 = 2 - (2*latency)/(alpha + beta)
+    # Coefficients for phi1
+    a1 = 2*latency*alpha**2
+    b1 = 3*alpha*beta + alpha**2
+    c1 = 2*alpha + 3*beta - 2*latency
+
+    # Find the roots
+    def find_roots(a: float, b: float, c: float) -> Tuple[float]:
+        root1 = (-b + math.sqrt(b**2 - 4*a*c))/(2*a)
+        root2 = (-b - math.sqrt(b**2 - 4*a*c))/(2*a)
+        return root1, root2
+    roots = [*find_roots(a0, b0, c0), *find_roots(a1, b1, c1)]
+
+    # Solution will be the root with the maximum value
+    return max(roots)

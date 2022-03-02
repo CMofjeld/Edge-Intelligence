@@ -15,6 +15,7 @@ from controller.serving_system import (
     ServingSystem,
     estimate_model_serving_latency,
     estimate_transmission_latency,
+    arrival_rate_from_latency
 )
 
 
@@ -585,3 +586,20 @@ def test_slack_latency_server(example_valid_session_setup_2_requests: Tuple[Serv
     assert system.slack_latency_server(server) == system.slack_latency_request(request1.id)
     assert system.set_session(session_config2)
     assert system.slack_latency_server(server) == system.slack_latency_request(request2.id)
+
+def test_max_additional_fps_by_latency(example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]):
+    # Setup
+    system, session_config = example_valid_session_setup
+    assert system.set_session(session_config)
+    request_id = session_config.request_id
+    request = system.requests[request_id]
+    request.max_latency = system.metrics[request_id].latency + 0.5
+    model_id = session_config.model_id
+    server = system.servers[session_config.server_id]
+    profiling_data = server.profiling_data[model_id]
+    alpha, beta = profiling_data.alpha, profiling_data.beta
+
+    # Test
+    max_fps = arrival_rate_from_latency(request.max_latency - estimate_transmission_latency(system.models[model_id].input_size, request.transmission_speed), alpha, beta)
+    expected = max_fps - request.arrival_rate
+    assert system.max_additional_fps_by_latency(server, model_id) == expected
