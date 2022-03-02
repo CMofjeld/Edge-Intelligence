@@ -1,4 +1,5 @@
 """Definition of class that models the inference serving system as a whole."""
+import copy
 import math
 from dataclasses import asdict
 from typing import Dict, List, Tuple
@@ -208,46 +209,24 @@ class ServingSystem:
             previous_model = self.sessions[request_id].model_id
             server.arrival_rate[previous_model] -= request.arrival_rate
 
-        # Temporarily update arrival rate for target model to simplify calculations below
-        server.arrival_rate[model_id] += request.arrival_rate
-
         # Throughput constraint
-        requested_capacity = sum(
-            [
-                server.arrival_rate[model_id]
-                / server.profiling_data[model_id].max_throughput
-                for model_id in server.models_served
-            ]
-        )
-        if requested_capacity > 1.0:
+        if request.arrival_rate > self.max_additional_fps(server, model_id):
             if restore_original:
                 server.arrival_rate[previous_model] += request.arrival_rate
-            server.arrival_rate[model_id] -= request.arrival_rate
             return False
 
         # Latency constraint
-        self.update_serving_latency(
-            server_id
-        )  # need to restore to original before returning
         latency_violated = False
-        # Check other requests
-        for served_request in server.requests_served:
-            if (
-                self.estimate_session_latency(self.sessions[served_request])
-                > self.requests[served_request].max_latency
-            ):
-                latency_violated = True
-                break
-        # Check current request
+        arrival_rate_dict = copy.deepcopy(server.arrival_rate)
+        arrival_rate_dict[model_id] += request.arrival_rate
+        profiling_data = server.profiling_data
         if (
-            not latency_violated
-            and self.estimate_session_latency(session_config) > request.max_latency
+            self.total_serving_latency(arrival_rate_dict, profiling_data)
+            > request.max_latency
         ):
             latency_violated = True
         if restore_original:
             server.arrival_rate[previous_model] += request.arrival_rate
-        server.arrival_rate[model_id] -= request.arrival_rate
-        self.update_serving_latency(server_id)
         if latency_violated:
             return False
 
@@ -313,6 +292,26 @@ class ServingSystem:
             self.max_additional_fps_by_capacity(server, model_id),
             self.max_additional_fps_by_latency(server, model_id),
         )
+
+    def total_serving_latency(
+        self,
+        arrival_rates: Dict[str, float],
+        profiling_data: Dict[str, ModelProfilingData],
+    ) -> float:
+        """Return the total serving latency when serving the given models with the given arrival rates.
+
+        Args:
+            arrival_rates (Dict[str, float]): dictionary mapping model IDs to arrival rates
+            profiling_data (Dict[str, ModelProfilingData]): dictionary mapping model IDS to profiling data
+
+        Returns:
+            float: estimated serving latency
+        """
+        total_latency = 0.0
+        for model_id, lamda in arrival_rates.items():
+            alpha, beta = profiling_data[model_id].alpha, profiling_data[model_id].beta
+            total_latency += estimate_model_serving_latency(lamda, alpha, beta)
+        return total_latency
 
     def add_request(self, new_request: SessionRequest) -> bool:
         """Add a new session request to the table of requests.
