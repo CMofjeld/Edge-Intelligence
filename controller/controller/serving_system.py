@@ -60,10 +60,6 @@ class ServingSystem:
                     return True
             # Record new session and update affected tables
             self.sessions[new_config.request_id] = new_config
-            # self.requests_served_by[new_config.server_id].add(new_config.request_id)
-            # self.arrival_rates[new_config.server_id] += self.requests[
-            #     new_config.request_id
-            # ].arrival_rate
             server = self.servers[new_config.server_id]
             server.requests_served.append(new_config.request_id)
             server.arrival_rate[new_config.model_id] += self.requests[
@@ -85,10 +81,6 @@ class ServingSystem:
             old_config = self.sessions[request_id]
             del self.sessions[request_id]
             del self.metrics[request_id]
-            # self.requests_served_by[old_config.server_id].remove(request_id)
-            # self.arrival_rates[old_config.server_id] -= self.requests[
-            #     request_id
-            # ].arrival_rate
             server = self.servers[old_config.server_id]
             server.requests_served.remove(request_id)
             server.arrival_rate[old_config.model_id] -= self.requests[
