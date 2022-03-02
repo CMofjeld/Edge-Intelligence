@@ -249,6 +249,17 @@ class ServingSystem:
             ]
         )
 
+    def slack_latency_server(self, server: Server) -> float:
+        """Return the maximum amount the serving latency on the server can increase without violating latency SLOs."""
+        if len(server.requests_served):
+            return min([self.slack_latency_request(request_id) for request_id in server.requests_served])
+        else:
+            return float("inf")
+
+    def slack_latency_request(self, request_id: str) -> float:
+        """Return the difference between the request's latency SLO and its current expected latency."""
+        return self.requests[request_id].max_latency - self.metrics[request_id].latency
+
     def add_request(self, new_request: SessionRequest) -> bool:
         """Add a new session request to the table of requests.
 

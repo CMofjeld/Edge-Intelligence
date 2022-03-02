@@ -557,3 +557,31 @@ def test_remaining_capacity(example_valid_session_setup: Tuple[ServingSystem, Se
     assert system.set_session(session_config)
     expected_remaining = 1.0 - server.arrival_rate[model_id] / server.profiling_data[model_id].max_throughput
     assert system.remaining_capacity(server) == expected_remaining
+
+def test_slack_latency_request(example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]):
+    # Setup
+    system, session_config = example_valid_session_setup
+    assert system.set_session(session_config)
+    request_id = session_config.request_id
+
+    # Test
+    max_latency = system.requests[request_id].max_latency
+    latency = system.metrics[request_id].latency
+    expected_slack = max_latency - latency
+    assert system.slack_latency_request(request_id) == expected_slack
+
+def test_slack_latency_server(example_valid_session_setup_2_requests: Tuple[ServingSystem, SessionConfiguration, SessionConfiguration]):
+    # Setup
+    system, session_config1, session_config2 = example_valid_session_setup_2_requests
+    server_id = session_config1.server_id
+    server = system.servers[server_id]
+    request1 = system.requests[session_config1.request_id]
+    request2 = system.requests[session_config2.request_id]
+    request1.max_latency = request2.max_latency + 0.1
+
+    # Test
+    assert system.slack_latency_server(server) == float("inf")
+    assert system.set_session(session_config1)
+    assert system.slack_latency_server(server) == system.slack_latency_request(request1.id)
+    assert system.set_session(session_config2)
+    assert system.slack_latency_server(server) == system.slack_latency_request(request2.id)
