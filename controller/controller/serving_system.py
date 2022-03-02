@@ -1,6 +1,6 @@
 """Definition of class that models the inference serving system as a whole."""
-from dataclasses import asdict
 import math
+from dataclasses import asdict
 from typing import Dict, List, Tuple
 
 from controller.cost_calculator import CostCalculator
@@ -125,7 +125,11 @@ class ServingSystem:
 
     def estimate_session_latency(self, session_config: SessionConfiguration) -> float:
         """Estimate the end-to-end latency for a given session."""
-        request_id, server_id, model_id = session_config.request_id, session_config.server_id, session_config.model_id
+        request_id, server_id, model_id = (
+            session_config.request_id,
+            session_config.server_id,
+            session_config.model_id,
+        )
         request = self.requests[request_id]
         serving_latency = self.servers[server_id].serving_latency[model_id]
         input_size = self.models[model_id].input_size
@@ -196,7 +200,9 @@ class ServingSystem:
             return False
 
         # Check if request is currently served by the target server
-        restore_original = False # True if we need to restore original settings before returning
+        restore_original = (
+            False  # True if we need to restore original settings before returning
+        )
         if request_id in server.requests_served:
             restore_original = True
             previous_model = self.sessions[request_id].model_id
@@ -220,15 +226,23 @@ class ServingSystem:
             return False
 
         # Latency constraint
-        self.update_serving_latency(server_id) # need to restore to original before returning
+        self.update_serving_latency(
+            server_id
+        )  # need to restore to original before returning
         latency_violated = False
         # Check other requests
         for served_request in server.requests_served:
-            if self.estimate_session_latency(self.sessions[served_request]) > self.requests[served_request].max_latency:
+            if (
+                self.estimate_session_latency(self.sessions[served_request])
+                > self.requests[served_request].max_latency
+            ):
                 latency_violated = True
                 break
         # Check current request
-        if not latency_violated and self.estimate_session_latency(session_config) > request.max_latency:
+        if (
+            not latency_violated
+            and self.estimate_session_latency(session_config) > request.max_latency
+        ):
             latency_violated = True
         if restore_original:
             server.arrival_rate[previous_model] += request.arrival_rate
@@ -253,7 +267,12 @@ class ServingSystem:
     def slack_latency_server(self, server: Server) -> float:
         """Return the maximum amount the serving latency on the server can increase without violating latency SLOs."""
         if len(server.requests_served):
-            return min([self.slack_latency_request(request_id) for request_id in server.requests_served])
+            return min(
+                [
+                    self.slack_latency_request(request_id)
+                    for request_id in server.requests_served
+                ]
+            )
         else:
             return float("inf")
 
@@ -264,7 +283,9 @@ class ServingSystem:
     def max_additional_fps_by_latency(self, server: Server, model_id: str) -> float:
         """Return the maximum additional FPS a given model could receive without violating latency SLOs."""
         # Find maximum latency for the given model
-        max_total_latency = server.serving_latency[model_id] + self.slack_latency_server(server)
+        max_total_latency = server.serving_latency[
+            model_id
+        ] + self.slack_latency_server(server)
         profiling_data = server.profiling_data[model_id]
         alpha, beta = profiling_data.alpha, profiling_data.beta
         cur_fps = server.arrival_rate[model_id]
@@ -276,7 +297,7 @@ class ServingSystem:
         try:
             max_fps = arrival_rate_from_latency(max_latency, alpha, beta)
         except ValueError:
-            return 0.0 # no arrival rate > 0 will result in a latency that low
+            return 0.0  # no arrival rate > 0 will result in a latency that low
 
         # Return difference between max and current arrival rate
         return max_fps - cur_fps
@@ -286,6 +307,12 @@ class ServingSystem:
         max_thru = server.profiling_data[model_id].max_throughput
         return max_thru * self.remaining_capacity(server)
 
+    def max_additional_fps(self, server: Server, model_id: str) -> float:
+        """Return the maximum additional FPS a given model could receive without violating any constraints."""
+        return min(
+            self.max_additional_fps_by_capacity(server, model_id),
+            self.max_additional_fps_by_latency(server, model_id),
+        )
 
     def add_request(self, new_request: SessionRequest) -> bool:
         """Add a new session request to the table of requests.
@@ -420,7 +447,7 @@ def estimate_model_serving_latency(lamda: float, alpha: float, beta: float) -> f
         * (1 + 2 * lamda * beta + (1 - lamda * beta) / (1 + lamda * alpha))
     )
     phi1 = (3 / 2) * (beta / (1 - lamda * alpha)) + (alpha / 2) * (
-        (lamda * alpha + 2) / (1 - (lamda ** 2) * (alpha ** 2))
+        (lamda * alpha + 2) / (1 - (lamda**2) * (alpha**2))
     )
     # Make sure latency is set to zero when arrival rate is zero
     fix_zero = 1000.0 * lamda
@@ -433,22 +460,24 @@ def estimate_transmission_latency(
     """Estimate transmission latency for a given data size and transmission speed."""
     return input_size / transmission_speed
 
+
 def arrival_rate_from_latency(latency: float, alpha: float, beta: float) -> float:
     """Solve the equations used to estimate a model's serving latency for arrival rate."""
     # Coefficients for phi0
-    a0 = (2*latency*alpha**2)/(alpha + beta) + 2*alpha*beta
+    a0 = (2 * latency * alpha**2) / (alpha + beta) + 2 * alpha * beta
     b0 = alpha + beta
-    c0 = 2 - (2*latency)/(alpha + beta)
+    c0 = 2 - (2 * latency) / (alpha + beta)
     # Coefficients for phi1
-    a1 = 2*latency*alpha**2
-    b1 = 3*alpha*beta + alpha**2
-    c1 = 2*alpha + 3*beta - 2*latency
+    a1 = 2 * latency * alpha**2
+    b1 = 3 * alpha * beta + alpha**2
+    c1 = 2 * alpha + 3 * beta - 2 * latency
 
     # Find the roots
     def find_roots(a: float, b: float, c: float) -> Tuple[float]:
-        root1 = (-b + math.sqrt(b**2 - 4*a*c))/(2*a)
-        root2 = (-b - math.sqrt(b**2 - 4*a*c))/(2*a)
+        root1 = (-b + math.sqrt(b**2 - 4 * a * c)) / (2 * a)
+        root2 = (-b - math.sqrt(b**2 - 4 * a * c)) / (2 * a)
         return root1, root2
+
     roots = [*find_roots(a0, b0, c0), *find_roots(a1, b1, c1)]
 
     # Solution will be the root with the maximum value

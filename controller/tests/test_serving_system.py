@@ -13,9 +13,9 @@ from controller.serving_dataclasses import (
 )
 from controller.serving_system import (
     ServingSystem,
+    arrival_rate_from_latency,
     estimate_model_serving_latency,
     estimate_transmission_latency,
-    arrival_rate_from_latency
 )
 
 
@@ -547,7 +547,9 @@ def test_json(example_valid_session_setup: Tuple[ServingSystem, SessionConfigura
 
 
 # UTIL TESTS
-def test_remaining_capacity(example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]):
+def test_remaining_capacity(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
     # Setup
     system, session_config = example_valid_session_setup
     server = system.servers[session_config.server_id]
@@ -556,10 +558,16 @@ def test_remaining_capacity(example_valid_session_setup: Tuple[ServingSystem, Se
     # Test
     assert system.remaining_capacity(server) == 1.0
     assert system.set_session(session_config)
-    expected_remaining = 1.0 - server.arrival_rate[model_id] / server.profiling_data[model_id].max_throughput
+    expected_remaining = (
+        1.0
+        - server.arrival_rate[model_id] / server.profiling_data[model_id].max_throughput
+    )
     assert system.remaining_capacity(server) == expected_remaining
 
-def test_slack_latency_request(example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]):
+
+def test_slack_latency_request(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
     # Setup
     system, session_config = example_valid_session_setup
     assert system.set_session(session_config)
@@ -571,7 +579,12 @@ def test_slack_latency_request(example_valid_session_setup: Tuple[ServingSystem,
     expected_slack = max_latency - latency
     assert system.slack_latency_request(request_id) == expected_slack
 
-def test_slack_latency_server(example_valid_session_setup_2_requests: Tuple[ServingSystem, SessionConfiguration, SessionConfiguration]):
+
+def test_slack_latency_server(
+    example_valid_session_setup_2_requests: Tuple[
+        ServingSystem, SessionConfiguration, SessionConfiguration
+    ]
+):
     # Setup
     system, session_config1, session_config2 = example_valid_session_setup_2_requests
     server_id = session_config1.server_id
@@ -583,11 +596,18 @@ def test_slack_latency_server(example_valid_session_setup_2_requests: Tuple[Serv
     # Test
     assert system.slack_latency_server(server) == float("inf")
     assert system.set_session(session_config1)
-    assert system.slack_latency_server(server) == system.slack_latency_request(request1.id)
+    assert system.slack_latency_server(server) == system.slack_latency_request(
+        request1.id
+    )
     assert system.set_session(session_config2)
-    assert system.slack_latency_server(server) == system.slack_latency_request(request2.id)
+    assert system.slack_latency_server(server) == system.slack_latency_request(
+        request2.id
+    )
 
-def test_max_additional_fps_by_latency(example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]):
+
+def test_max_additional_fps_by_latency(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
     # Setup
     system, session_config = example_valid_session_setup
     assert system.set_session(session_config)
@@ -600,11 +620,21 @@ def test_max_additional_fps_by_latency(example_valid_session_setup: Tuple[Servin
     alpha, beta = profiling_data.alpha, profiling_data.beta
 
     # Test
-    max_fps = arrival_rate_from_latency(request.max_latency - estimate_transmission_latency(system.models[model_id].input_size, request.transmission_speed), alpha, beta)
+    max_fps = arrival_rate_from_latency(
+        request.max_latency
+        - estimate_transmission_latency(
+            system.models[model_id].input_size, request.transmission_speed
+        ),
+        alpha,
+        beta,
+    )
     expected = max_fps - request.arrival_rate
     assert system.max_additional_fps_by_latency(server, model_id) == expected
 
-def test_max_additional_fps_by_capacity(example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]):
+
+def test_max_additional_fps_by_capacity(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
     # Setup
     system, session_config = example_valid_session_setup
     server = system.servers[session_config.server_id]
@@ -615,4 +645,7 @@ def test_max_additional_fps_by_capacity(example_valid_session_setup: Tuple[Servi
     # Test
     assert system.max_additional_fps_by_capacity(server, model_id) == max_thru
     assert system.set_session(session_config)
-    assert system.max_additional_fps_by_capacity(server, model_id) == max_thru - arrival_rate
+    assert (
+        system.max_additional_fps_by_capacity(server, model_id)
+        == max_thru - arrival_rate
+    )
