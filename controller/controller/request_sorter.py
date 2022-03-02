@@ -3,7 +3,7 @@ import random
 from abc import ABC, abstractmethod
 from typing import List
 
-from controller.serving_dataclasses import SessionRequest
+from controller.serving_dataclasses import SessionConfiguration, SessionRequest
 from controller.serving_system import ServingSystem
 
 
@@ -59,6 +59,7 @@ class ASRequestSorter(RequestSorter):
         )
         return sorted_requests
 
+
 class ARRequestSorter(RequestSorter):
     """Request sorter that sorts first by minimum accuracy (A) and then by arrival rate (R)."""
 
@@ -78,6 +79,7 @@ class ARRequestSorter(RequestSorter):
         )
         return sorted_requests
 
+
 class RRequestSorter(RequestSorter):
     """Request sorter that sorts by arrival rate (R)."""
 
@@ -96,3 +98,40 @@ class RRequestSorter(RequestSorter):
             reverse=True,
         )
         return sorted_requests
+
+
+class NRRequestSorter(RequestSorter):
+    """Request sorter that sorts by number(N) of available routes(R)."""
+
+    def sort(self, serving_system: ServingSystem) -> List[SessionRequest]:
+        """Return the session requests sorted by number of available routes.
+
+        Args:
+            serving_system (ServingSystem): model of the inference serving problem instance
+
+        Returns:
+            List[SessionRequest]: sorted list of session requests
+        """
+        sorted_requests = sorted(
+            serving_system.requests.values(),
+            key=lambda request: self.available_routes(request.id, serving_system),
+        )
+        return sorted_requests
+
+    def available_routes(self, request_id: str, serving_system: ServingSystem) -> int:
+        """TODO
+
+        Args:
+            request_id (str): _description_
+            serving_system (ServingSystem): _description_
+
+        Returns:
+            int: _description_
+        """
+        valid_configs = 0
+        for server_id in serving_system.servers:
+            for model_id in serving_system.servers[server_id].models_served:
+                session_config = SessionConfiguration(request_id, server_id, model_id)
+                if serving_system.is_valid_config(session_config):
+                    valid_configs += 1
+        return valid_configs
