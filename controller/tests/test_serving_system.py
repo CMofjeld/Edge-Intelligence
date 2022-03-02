@@ -543,3 +543,17 @@ def test_json(example_valid_session_setup: Tuple[ServingSystem, SessionConfigura
     assert system.servers == system2.servers
     assert system.sessions == system2.sessions
     assert system.metrics == system2.metrics
+
+
+# UTIL TESTS
+def test_remaining_capacity(example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]):
+    # Setup
+    system, session_config = example_valid_session_setup
+    server = system.servers[session_config.server_id]
+    model_id = session_config.model_id
+
+    # Test
+    assert system.remaining_capacity(server) == 1.0
+    assert system.set_session(session_config)
+    expected_remaining = 1.0 - server.arrival_rate[model_id] / server.profiling_data[model_id].max_throughput
+    assert system.remaining_capacity(server) == expected_remaining

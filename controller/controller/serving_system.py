@@ -239,6 +239,16 @@ class ServingSystem:
         # All constraints satisfied
         return True
 
+    def remaining_capacity(self, server: Server) -> float:
+        """Return the remaining capacity for a given server."""
+        return 1.0 - sum(
+            [
+                server.arrival_rate[model_id]
+                / server.profiling_data[model_id].max_throughput
+                for model_id in server.models_served
+            ]
+        )
+
     def add_request(self, new_request: SessionRequest) -> bool:
         """Add a new session request to the table of requests.
 
