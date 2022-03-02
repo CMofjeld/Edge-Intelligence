@@ -281,6 +281,11 @@ class ServingSystem:
         # Return difference between max and current arrival rate
         return max_fps - cur_fps
 
+    def max_additional_fps_by_capacity(self, server: Server, model_id: str) -> float:
+        """Return the maximum additional FPS a given model could receive without violating server capacity."""
+        max_thru = server.profiling_data[model_id].max_throughput
+        return max_thru * self.remaining_capacity(server)
+
 
     def add_request(self, new_request: SessionRequest) -> bool:
         """Add a new session request to the table of requests.

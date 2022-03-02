@@ -603,3 +603,16 @@ def test_max_additional_fps_by_latency(example_valid_session_setup: Tuple[Servin
     max_fps = arrival_rate_from_latency(request.max_latency - estimate_transmission_latency(system.models[model_id].input_size, request.transmission_speed), alpha, beta)
     expected = max_fps - request.arrival_rate
     assert system.max_additional_fps_by_latency(server, model_id) == expected
+
+def test_max_additional_fps_by_capacity(example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]):
+    # Setup
+    system, session_config = example_valid_session_setup
+    server = system.servers[session_config.server_id]
+    model_id = session_config.model_id
+    max_thru = server.profiling_data[model_id].max_throughput
+    arrival_rate = system.requests[session_config.request_id].arrival_rate
+
+    # Test
+    assert system.max_additional_fps_by_capacity(server, model_id) == max_thru
+    assert system.set_session(session_config)
+    assert system.max_additional_fps_by_capacity(server, model_id) == max_thru - arrival_rate
