@@ -122,3 +122,74 @@ class GCFConfigRanker(SessionConfigRanker):
             ]
         )
         return remaining_capacity
+
+
+class LatencyConfigRanker(SessionConfigRanker):
+    """Configuration Ranker that ranks configurations based on remaining server capacity."""
+    def __init__(self, greater=True):
+        self.greater = greater
+
+    def rank(
+        self, session_config: SessionConfiguration, serving_system: ServingSystem
+    ) -> float:
+        """TODO
+
+        Args:
+            session_config (SessionConfiguration): session configuration to consider
+            serving_system (ServingSystem): model of the inference serving problem instance
+
+        Returns:
+            float: remaining capacity for the specified server and model in requests per second
+        """
+        # Validate config
+        if not serving_system.is_valid_config(session_config):
+            return float("inf")
+
+        request_id = session_config.request_id
+
+        # Check if the request is already served by the system, so its original config can be restored
+        if request_id in serving_system.sessions:
+            prev_config = serving_system.sessions[request_id]
+        else:
+            prev_config = None
+
+        # Calculate increase in cost
+        serving_system.set_session(session_config)
+        latency = serving_system.metrics[request_id].latency
+
+        # Restore previous state
+        if prev_config:
+            serving_system.set_session(prev_config)
+        else:
+            serving_system.clear_session(request_id)
+
+        # Return result
+        return latency if self.greater else -latency
+
+
+class CapacityConfigRanker(SessionConfigRanker):
+    """Configuration Ranker that ranks configurations based on remaining server capacity."""
+    def __init__(self, greater=True):
+        self.greater = greater
+
+    def rank(
+        self, session_config: SessionConfiguration, serving_system: ServingSystem
+    ) -> float:
+        """TODO
+
+        Args:
+            session_config (SessionConfiguration): session configuration to consider
+            serving_system (ServingSystem): model of the inference serving problem instance
+
+        Returns:
+            float: remaining capacity for the specified server and model in requests per second
+        """
+        server = serving_system.servers[session_config.server_id]
+        remaining_capacity = 1 - sum(
+            [
+                server.arrival_rate[model_id]
+                / server.profiling_data[model_id].max_throughput
+                for model_id in server.models_served
+            ]
+        )
+        return remaining_capacity if self.greater else -remaining_capacity
