@@ -649,3 +649,19 @@ def test_max_additional_fps_by_capacity(
         system.max_additional_fps_by_capacity(server, model_id)
         == max_thru - arrival_rate
     )
+
+
+def test_update_additional_fps(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
+    # Setup
+    system, session_config = example_valid_session_setup
+    server = system.servers[session_config.server_id]
+    model_id = session_config.model_id
+
+    # Test
+    system.update_additional_fps(server)
+    assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps(server, model_id)
+    assert system.set_session(session_config)
+    system.update_additional_fps(server)
+    assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps(server, model_id)
