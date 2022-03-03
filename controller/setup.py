@@ -7,6 +7,7 @@ setup(
     install_requires=[
         'pyzmq',
         'numpy',
-        'matplotlib'
+        'matplotlib',
+        'sortedcollections'
     ]
 )
