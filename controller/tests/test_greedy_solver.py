@@ -2,7 +2,7 @@
 import pytest
 import sortedcollections
 from controller.cost_calculator import ESquaredCost
-from controller.greedy_solver import PlacementAlgorithm
+from controller.greedy_solver import PlacementAlgorithm, IterativePromoter
 from controller.serving_dataclasses import (
     Model,
     ModelProfilingData,
@@ -38,10 +38,10 @@ def example_system() -> ServingSystem:
                     alpha=0.1063, beta=0.075, max_throughput=2
                 ),
                 "efficientd0": ModelProfilingData(
-                    alpha=0.23, beta=0.07, max_throughput=3
+                    alpha=0.23, beta=0.07, max_throughput=2
                 ),
                 "efficientd1": ModelProfilingData(
-                    alpha=0.39, beta=0.11, max_throughput=3
+                    alpha=0.39, beta=0.11, max_throughput=1
                 ),
             },
             id="nx1",
@@ -53,10 +53,10 @@ def example_system() -> ServingSystem:
                     alpha=0.103, beta=0.057, max_throughput=3
                 ),
                 "efficientd0": ModelProfilingData(
-                    alpha=0.19, beta=0.05, max_throughput=3
+                    alpha=0.19, beta=0.05, max_throughput=2
                 ),
                 "efficientd1": ModelProfilingData(
-                    alpha=0.29, beta=0.06, max_throughput=3
+                    alpha=0.29, beta=0.06, max_throughput=1
                 ),
             },
             id="agx1",
@@ -161,3 +161,55 @@ def test_pa_latency_check(
 
     # Test
     assert pa.best_config(example_request, example_system) == None
+
+
+# ITERATIVE PROMOTER TESTS
+@pytest.mark.parametrize(
+    "arrival_rate, server_id, model_id, expected_model",
+    [
+        (2.0, "agx1", "mobilenet", "efficientd0"),
+        (2.0, "agx1", "efficientd0", "efficientd0"),
+    ]
+)
+def test_iterative_promoter_1_request_already_set(
+    example_system: ServingSystem,
+    example_request: SessionRequest,
+    arrival_rate: float,
+    server_id: str,
+    model_id: str,
+    expected_model: str
+):
+    # Setup
+    example_request.arrival_rate = arrival_rate
+    example_system.add_request(example_request)
+    assert example_system.set_session(SessionConfiguration(example_request.id, server_id, model_id))
+    server = example_system.servers[server_id]
+    ip = IterativePromoter()
+
+    # Test
+    ip.adjust_sessions(server, example_system)
+    assert example_system.sessions[example_request.id].model_id == expected_model
+
+
+@pytest.mark.parametrize(
+    "arrival_rate, server_id, expected_model",
+    [
+        (2.0, "agx1", "efficientd0"),
+    ]
+)
+def test_iterative_promoter_1_request_not_set(
+    example_system: ServingSystem,
+    example_request: SessionRequest,
+    arrival_rate: float,
+    server_id: str,
+    expected_model: str
+):
+    # Setup
+    example_request.arrival_rate = arrival_rate
+    example_system.add_request(example_request)
+    server = example_system.servers[server_id]
+    ip = IterativePromoter()
+
+    # Test
+    ip.adjust_sessions(server, example_system, additional_request=example_request)
+    assert example_system.sessions[example_request.id].model_id == expected_model
