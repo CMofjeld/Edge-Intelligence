@@ -1,6 +1,7 @@
 """Definition of class that models the inference serving system as a whole."""
 import copy
 import math
+import sortedcollections
 from dataclasses import asdict
 from typing import Dict, List, Tuple
 
@@ -21,9 +22,9 @@ class ServingSystem:
     def __init__(
         self,
         cost_calc: CostCalculator,
-        requests: List[SessionRequest] = [],
-        models: List[Model] = [],
-        servers: List[Server] = [],
+        requests: List[SessionRequest] = None,
+        models: List[Model] = None,
+        servers: List[Server] = None,
     ) -> None:
         """Initialize the system's table of requests, models, and servers.
 
@@ -36,9 +37,16 @@ class ServingSystem:
         # Store cost algorithm
         self.cost_calc = cost_calc
         # Map the objects to their IDs
-        self.requests = {request.id: request for request in requests}
-        self.models = {model.id: model for model in models}
-        self.servers = {server.id: server for server in servers}
+        self.requests = {}
+        if requests:
+            for request in requests: self.add_request(request)
+        self.models = {}
+        self.models_by_accuracy = sortedcollections.SortedListWithKey(key=lambda model: model.accuracy)
+        if models:
+            for model in models: self.add_model(model)
+        self.servers = {}
+        if servers:
+            for server in servers: self.add_server(server)
         # Set up empty tables for routing-based data, since no sessions are configured yet
         self.clear_all_sessions()
 
@@ -361,6 +369,7 @@ class ServingSystem:
         """
         if new_model.id not in self.models:
             self.models[new_model.id] = new_model
+            self.models_by_accuracy.add(new_model)
             return True
         else:
             return False
@@ -404,14 +413,14 @@ class ServingSystem:
         ]
         for request in requests:
             self.add_request(request)
+        models = [Model(**model_dict) for model_dict in json_dict["models"]]
+        for model in models:
+            self.add_model(model)
         servers = [Server(**server_dict) for server_dict in json_dict["servers"]]
         for server in servers:
             for model_id, profiling_dict in server.profiling_data.items():
                 server.profiling_data[model_id] = ModelProfilingData(**profiling_dict)
             self.add_server(server)
-        models = [Model(**model_dict) for model_dict in json_dict["models"]]
-        for model in models:
-            self.add_model(model)
         sessions = [
             SessionConfiguration(**session_dict)
             for session_dict in json_dict["sessions"]
