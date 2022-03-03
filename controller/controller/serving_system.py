@@ -42,6 +42,7 @@ class ServingSystem:
             for request in requests: self.add_request(request)
         self.models = {}
         self.models_by_accuracy = sortedcollections.SortedListWithKey(key=lambda model: model.accuracy)
+        self.servers_by_model = {}
         if models:
             for model in models: self.add_model(model)
         self.servers = {}
@@ -76,6 +77,7 @@ class ServingSystem:
                 new_config.request_id
             ].arrival_rate
             self.update_metrics_for_requests_served_by(new_config.server_id)
+            self.update_additional_fps(server)
             return True
         else:
             # Invalid configuration
@@ -97,6 +99,7 @@ class ServingSystem:
                 request_id
             ].arrival_rate
             self.update_metrics_for_requests_served_by(server.id)
+            self.update_additional_fps(server)
 
     def clear_all_sessions(self) -> None:
         """Clear all session configurations and reset related tables to default values."""
@@ -108,6 +111,7 @@ class ServingSystem:
                 model_id: 0.0 for model_id in server.models_served
             }
             server.requests_served = []
+            self.update_additional_fps(server)
 
     def update_metrics(self, request_id: str) -> None:
         """Recalculate the metrics for a single request."""
@@ -269,6 +273,10 @@ class ServingSystem:
 
     def max_additional_fps_by_latency(self, server: Server, model_id: str) -> float:
         """Return the maximum additional FPS a given model could receive without violating latency SLOs."""
+        # Check for no restriction on latency
+        if self.slack_latency_server(server) == float("inf"):
+            return float("inf")
+
         # Find maximum latency for the given model
         max_total_latency = server.serving_latency[
             model_id
@@ -321,6 +329,12 @@ class ServingSystem:
             total_latency += estimate_model_serving_latency(lamda, alpha, beta)
         return total_latency
 
+    def update_additional_fps(self, server: Server) -> None:
+        """Recalculate max additional FPS for each model on server and update servers_by_model table."""
+        for model_id in server.models_served:
+            additional_fps = self.max_additional_fps(server, model_id)
+            self.servers_by_model[model_id][server.id] = additional_fps
+
     def add_request(self, new_request: SessionRequest) -> bool:
         """Add a new session request to the table of requests.
 
@@ -370,6 +384,7 @@ class ServingSystem:
         if new_model.id not in self.models:
             self.models[new_model.id] = new_model
             self.models_by_accuracy.add(new_model)
+            self.servers_by_model[new_model.id] = sortedcollections.ValueSortedDict()
             return True
         else:
             return False
@@ -388,6 +403,7 @@ class ServingSystem:
         """
         if new_server.id not in self.servers:
             self.servers[new_server.id] = new_server
+            self.update_additional_fps(new_server)
             return True
         else:
             return False
@@ -416,6 +432,8 @@ class ServingSystem:
         models = [Model(**model_dict) for model_dict in json_dict["models"]]
         for model in models:
             self.add_model(model)
+        for request_id, metrics_dict in json_dict["metrics"].items():
+            self.metrics[request_id] = SessionMetrics(**metrics_dict)
         servers = [Server(**server_dict) for server_dict in json_dict["servers"]]
         for server in servers:
             for model_id, profiling_dict in server.profiling_data.items():
@@ -428,8 +446,6 @@ class ServingSystem:
         for session in sessions:
             request_id = session.request_id
             self.sessions[request_id] = session
-        for request_id, metrics_dict in json_dict["metrics"].items():
-            self.metrics[request_id] = SessionMetrics(**metrics_dict)
 
 
 def estimate_model_serving_latency(lamda: float, alpha: float, beta: float) -> float:
