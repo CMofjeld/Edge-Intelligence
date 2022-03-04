@@ -72,16 +72,31 @@ class ServingSystem:
             # Record new session and update affected tables
             self.sessions[new_config.request_id] = new_config
             server = self.servers[new_config.server_id]
+            request = self.requests[new_config.request_id]
             server.requests_served.append(new_config.request_id)
             server.arrival_rate[new_config.model_id] += self.requests[
                 new_config.request_id
             ].arrival_rate
+            min_acc_model = self.find_min_accuracy_model(request.min_accuracy, server.models_served)
+            server.request_to_min_model[request.id] = min_acc_model
+            server.min_arrival_rate[min_acc_model] += request.arrival_rate
             self.update_metrics_for_requests_served_by(new_config.server_id)
             self.update_additional_fps(server)
             return True
         else:
             # Invalid configuration
             return False
+
+    def find_min_accuracy_model(self, min_accuracy: float, models: List[str]) -> str:
+        """Return the ID of the model in the list with lowest accuracy >= min_accuracy."""
+        min_acc_found = float("inf")
+        min_model_id = None
+        for model_id in models:
+            accuracy = self.models[model_id].accuracy
+            if accuracy >= min_accuracy and accuracy < min_acc_found:
+                min_model_id = model_id
+                min_acc_found = accuracy
+        return min_model_id
 
     def clear_session(self, request_id: str) -> None:
         """Reset the session configuration for the request to empty and update related tables.
@@ -98,6 +113,8 @@ class ServingSystem:
             server.arrival_rate[old_config.model_id] -= self.requests[
                 request_id
             ].arrival_rate
+            server.min_arrival_rate[server.request_to_min_model[request_id]] -= self.requests[request_id].arrival_rate
+            del server.request_to_min_model[request_id]
             self.update_metrics_for_requests_served_by(server.id)
             self.update_additional_fps(server)
 
@@ -107,10 +124,12 @@ class ServingSystem:
         self.metrics = {}
         for server in self.servers.values():
             server.arrival_rate = {model_id: 0.0 for model_id in server.models_served}
+            server.min_arrival_rate = {model_id: 0.0 for model_id in server.models_served}
             server.serving_latency = {
                 model_id: 0.0 for model_id in server.models_served
             }
             server.requests_served = []
+            server.request_to_min_model = {}
             self.update_additional_fps(server)
 
     def update_metrics(self, request_id: str) -> None:

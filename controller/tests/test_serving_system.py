@@ -1,6 +1,6 @@
 """Unit tests for ServingSystem."""
 import copy
-from typing import Tuple
+from typing import List, Tuple
 
 import pytest
 from controller.cost_calculator import LESumOfSquaresCost
@@ -151,6 +151,7 @@ def example_valid_session_setup(
     example_profiling_data.max_throughput = example_request.arrival_rate
     example_server.profiling_data[example_model.id] = example_profiling_data
     example_server.arrival_rate[example_model.id] = 0.0
+    example_server.min_arrival_rate[example_model.id] = 0.0
     example_server.serving_latency[example_model.id] = 0.0
     example_system.add_model(example_model)
     example_system.add_request(example_request)
@@ -190,6 +191,7 @@ def example_valid_session_setup_2_requests(
     )
     example_server.profiling_data[example_model.id] = example_profiling_data
     example_server.arrival_rate[example_model.id] = 0.0
+    example_server.min_arrival_rate[example_model.id] = 0.0
     example_server.serving_latency[example_model.id] = 0.0
     example_system.add_model(example_model)
     example_system.add_request(request1)
@@ -236,12 +238,22 @@ def test_set_session_valid(
 ):
     # Setup
     system, session_config = example_valid_session_setup
+    request = system.requests[session_config.request_id]
+    server = system.servers[session_config.server_id]
+    expected_model = system.find_min_accuracy_model(request.min_accuracy, server.models_served)
+    model_id = session_config.model_id
 
     # Test
-    assert session_config.request_id not in system.sessions
+    assert request.id not in system.sessions
+    assert request.id not in server.request_to_min_model
+    assert server.arrival_rate[model_id] == 0.0
+    assert server.min_arrival_rate[model_id] == 0.0
     assert system.set_session(session_config)
     assert session_config.request_id in system.sessions
     assert system.sessions[session_config.request_id] == session_config
+    assert server.request_to_min_model[request.id] == expected_model
+    assert server.arrival_rate[model_id] == request.arrival_rate
+    assert server.min_arrival_rate[expected_model] == request.arrival_rate
 
 
 def test_set_session_invalid_request_id(
@@ -282,6 +294,40 @@ def test_set_session_invalid_server_id(
     # Test
     assert not system.set_session(session_config)
 
+
+def test_set_session_request_to_min_model(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
+    # Setup
+    system, session_config = example_valid_session_setup
+    request = system.requests[session_config.request_id]
+    server = system.servers[session_config.server_id]
+    expected_model = system.find_min_accuracy_model(request.min_accuracy, server.models_served)
+
+    # Test
+    assert request.id not in server.request_to_min_model
+    assert system.set_session(session_config)
+    assert server.request_to_min_model[request.id] == expected_model
+
+
+def test_clear_session(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
+    # Setup
+    system, session_config = example_valid_session_setup
+    server = system.servers[session_config.server_id]
+    request = system.requests[session_config.request_id]
+    model_id = session_config.model_id
+    assert system.set_session(session_config)
+    min_model_id = server.request_to_min_model[request.id]
+
+    # Test
+    system.clear_session(request.id)
+    assert request.id not in system.sessions
+    assert request.id not in server.requests_served
+    assert request.id not in server.request_to_min_model
+    assert server.arrival_rate[model_id] == 0.0
+    assert server.min_arrival_rate[min_model_id] == 0.0
 
 # CONSTRAINT TESTS
 def test_throughput_constraint_1_request(
@@ -632,3 +678,20 @@ def test_update_additional_fps(
     assert system.set_session(session_config)
     system.update_additional_fps(server)
     assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps_current(server)[model_id]
+
+@pytest.mark.parametrize(
+    "min_acc, models, expected",
+    [
+        (0.0, ["mobilenet", "efficientd0", "efficientd1"], "mobilenet"),
+        (0.35, ["mobilenet", "efficientd0", "efficientd1"], "efficientd1"),
+        (0.50, ["mobilenet", "efficientd0", "efficientd1"], None),
+    ]
+)
+def test_find_min_accuracy_model(
+    example_system: ServingSystem,
+    min_acc: float,
+    models: List[str],
+    expected: str
+):
+    # Test
+    assert example_system.find_min_accuracy_model(min_acc, models) == expected

@@ -65,21 +65,29 @@ class ServerBase:
     profiling_data: Dict[
         str, ModelProfilingData
     ] = field(default_factory=dict)  # maps model IDs to their profiling data
+    requests_served: List[
+        str
+    ] = field(default_factory=list)  # set of request IDs for requests scheduled to be served by the server
     serving_latency: Dict[
         str, float
     ] = None  # maps model IDs to expected serving latency
     arrival_rate: Dict[
         str, float
     ] = None  # maps model IDs to total scheduled arrival rate for that model
-    requests_served: List[
-        str
-    ] = field(default_factory=list)  # set of request IDs for requests scheduled to be served by the server
+    min_arrival_rate: Dict[
+        str, float
+    ] = None  # maps model IDs to total minimum arrival rate for that model
+    request_to_min_model: Dict[
+        str, str
+    ] = field(default_factory=dict)  # maps requests to the minimum accuracy model that can serve them
 
     def __post_init__(self):
         if not self.serving_latency:
             self.serving_latency = {model_id: 0.0 for model_id in self.models_served}
         if not self.arrival_rate:
             self.arrival_rate = {model_id: 0.0 for model_id in self.models_served}
+        if not self.min_arrival_rate:
+            self.min_arrival_rate = {model_id: 0.0 for model_id in self.models_served}
 
 
 
