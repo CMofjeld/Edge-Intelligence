@@ -43,6 +43,7 @@ class ServingSystem:
         self.models = {}
         self.models_by_accuracy = sortedcollections.SortedListWithKey(key=lambda model: model.accuracy)
         self.servers_by_model = {}
+        self.servers_by_model_min = {}
         if models:
             for model in models: self.add_model(model)
         self.servers = {}
@@ -449,9 +450,15 @@ class ServingSystem:
 
     def update_additional_fps(self, server: Server) -> None:
         """Recalculate max additional FPS for each model on server and update servers_by_model table."""
+        # Update table for current load
         additional_fps = self.max_additional_fps_current(server)
         for model_id, fps in additional_fps.items():
             self.servers_by_model[model_id][server.id] = fps
+
+        # Update table for minimum load
+        min_additional_fps = self.max_additional_fps_at_minimum(server)
+        for model_id, fps in min_additional_fps.items():
+            self.servers_by_model_min[model_id][server.id] = fps
 
     def add_request(self, new_request: SessionRequest) -> bool:
         """Add a new session request to the table of requests.
@@ -503,6 +510,7 @@ class ServingSystem:
             self.models[new_model.id] = new_model
             self.models_by_accuracy.add(new_model)
             self.servers_by_model[new_model.id] = sortedcollections.ValueSortedDict()
+            self.servers_by_model_min[new_model.id] = sortedcollections.ValueSortedDict()
             return True
         else:
             return False

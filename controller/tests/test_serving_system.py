@@ -393,6 +393,7 @@ def test_throughput_constraint_2_requests_different_model_valid(
     server.models_served.append(model2.id)
     server.profiling_data[model2.id] = copy.deepcopy(server.profiling_data[model1.id])
     server.arrival_rate[model2.id] = 0.0
+    server.min_arrival_rate[model2.id] = 0.0
     server.serving_latency[model2.id] = 0.0
     assert system.set_session(session_config1)
     serving_latency = server.serving_latency[model1.id]
@@ -427,6 +428,7 @@ def test_throughput_constraint_2_requests_different_model_invalid(
     server.models_served.append(model2.id)
     server.profiling_data[model2.id] = copy.deepcopy(server.profiling_data[model1.id])
     server.arrival_rate[model2.id] = 0.0
+    server.min_arrival_rate[model2.id] = 0.0
     server.serving_latency[model2.id] = 0.0
     assert system.set_session(session_config1)
     serving_latency = server.serving_latency[model1.id]
@@ -520,6 +522,7 @@ def test_latency_constraint_different_model(
     server.models_served.append(model2.id)
     server.profiling_data[model2.id] = copy.deepcopy(server.profiling_data[model1.id])
     server.arrival_rate[model2.id] = 0.0
+    server.min_arrival_rate[model2.id] = 0.0
     server.serving_latency[model2.id] = 0.0
     session_config2.model_id = model2.id
     request1 = system.requests[session_config1.request_id]
@@ -671,13 +674,17 @@ def test_update_additional_fps(
     system, session_config = example_valid_session_setup
     server = system.servers[session_config.server_id]
     model_id = session_config.model_id
+    request = system.requests[session_config.request_id]
+    min_model = system.find_min_accuracy_model(request.min_accuracy, server.models_served)
 
     # Test
     system.update_additional_fps(server)
     assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps_current(server)[model_id]
+    assert system.servers_by_model_min[min_model][server.id] == system.max_additional_fps_at_minimum(server)[min_model]
     assert system.set_session(session_config)
     system.update_additional_fps(server)
     assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps_current(server)[model_id]
+    assert system.servers_by_model_min[min_model][server.id] == system.max_additional_fps_at_minimum(server)[min_model]
 
 @pytest.mark.parametrize(
     "min_acc, models, expected",
