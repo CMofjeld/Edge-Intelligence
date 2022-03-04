@@ -1,9 +1,10 @@
 """Definition of class that models the inference serving system as a whole."""
 import copy
 import math
-import sortedcollections
 from dataclasses import asdict
 from typing import Dict, List, Tuple
+
+import sortedcollections
 
 from controller.cost_calculator import CostCalculator
 from controller.serving_dataclasses import (
@@ -39,16 +40,21 @@ class ServingSystem:
         # Map the objects to their IDs
         self.requests = {}
         if requests:
-            for request in requests: self.add_request(request)
+            for request in requests:
+                self.add_request(request)
         self.models = {}
-        self.models_by_accuracy = sortedcollections.SortedListWithKey(key=lambda model: model.accuracy)
+        self.models_by_accuracy = sortedcollections.SortedListWithKey(
+            key=lambda model: model.accuracy
+        )
         self.servers_by_model = {}
         self.servers_by_model_min = {}
         if models:
-            for model in models: self.add_model(model)
+            for model in models:
+                self.add_model(model)
         self.servers = {}
         if servers:
-            for server in servers: self.add_server(server)
+            for server in servers:
+                self.add_server(server)
         # Set up empty tables for routing-based data, since no sessions are configured yet
         self.clear_all_sessions()
 
@@ -78,7 +84,9 @@ class ServingSystem:
             server.arrival_rate[new_config.model_id] += self.requests[
                 new_config.request_id
             ].arrival_rate
-            min_acc_model = self.find_min_accuracy_model(request.min_accuracy, server.models_served)
+            min_acc_model = self.find_min_accuracy_model(
+                request.min_accuracy, server.models_served
+            )
             server.request_to_min_model[request.id] = min_acc_model
             server.min_arrival_rate[min_acc_model] += request.arrival_rate
             self.update_metrics_for_requests_served_by(new_config.server_id)
@@ -114,7 +122,9 @@ class ServingSystem:
             server.arrival_rate[old_config.model_id] -= self.requests[
                 request_id
             ].arrival_rate
-            server.min_arrival_rate[server.request_to_min_model[request_id]] -= self.requests[request_id].arrival_rate
+            server.min_arrival_rate[
+                server.request_to_min_model[request_id]
+            ] -= self.requests[request_id].arrival_rate
             del server.request_to_min_model[request_id]
             self.update_metrics_for_requests_served_by(server.id)
             self.update_additional_fps(server)
@@ -125,7 +135,9 @@ class ServingSystem:
         self.metrics = {}
         for server in self.servers.values():
             server.arrival_rate = {model_id: 0.0 for model_id in server.models_served}
-            server.min_arrival_rate = {model_id: 0.0 for model_id in server.models_served}
+            server.min_arrival_rate = {
+                model_id: 0.0 for model_id in server.models_served
+            }
             server.serving_latency = {
                 model_id: 0.0 for model_id in server.models_served
             }
@@ -186,7 +198,9 @@ class ServingSystem:
         if server_id not in self.servers:
             raise Exception("invalid server ID")
         server = self.servers[server_id]
-        total_serving = self.total_serving_latency(server.arrival_rate, server.profiling_data)
+        total_serving = self.total_serving_latency(
+            server.arrival_rate, server.profiling_data
+        )
         for model_id in server.models_served:
             server.serving_latency[model_id] = total_serving
 
@@ -273,16 +287,19 @@ class ServingSystem:
         """
         return 1.0 - sum(
             [
-                arrival_rates[model_id]
-                / profiling_data[model_id].max_throughput
+                arrival_rates[model_id] / profiling_data[model_id].max_throughput
                 for model_id in arrival_rates
             ]
         )
 
-    def max_serving_latency_single(self, transmission_speed: float, input_size: float, max_total_latency: float) -> float:
+    def max_serving_latency_single(
+        self, transmission_speed: float, input_size: float, max_total_latency: float
+    ) -> float:
         """Return maximum serving latency given a transmission speed, input size, and maximum total latency."""
-        return max_total_latency - estimate_transmission_latency(input_size, transmission_speed)
-    
+        return max_total_latency - estimate_transmission_latency(
+            input_size, transmission_speed
+        )
+
     def max_serving_latency(self, request_to_model: Dict[str, str]) -> float:
         """Return the maximum serving latency for a server given a mapping of requests to models."""
         max_serving = float("inf")
@@ -292,14 +309,19 @@ class ServingSystem:
             transmission_speed = request.transmission_speed
             model = self.models[model_id]
             input_size = model.input_size
-            max_serving = min(max_serving, self.max_serving_latency_single(transmission_speed, input_size, max_latency))
+            max_serving = min(
+                max_serving,
+                self.max_serving_latency_single(
+                    transmission_speed, input_size, max_latency
+                ),
+            )
         return max_serving
 
     def max_additional_fps_by_latency(
         self,
         arrival_rates: Dict[str, float],
         profiling_data: Dict[str, ModelProfilingData],
-        max_serving: float
+        max_serving: float,
     ) -> Dict[str, float]:
         """Return the maximum additional FPS a given model could receive without violating latency SLOs.
 
@@ -322,7 +344,9 @@ class ServingSystem:
         # Find the maximum arrival rate for each model that will result in max latency
         model_to_max_fps = {}
         for model_id in profiling_data:
-            model_max_latency = max_serving - total_current_latency + current_latency[model_id]
+            model_max_latency = (
+                max_serving - total_current_latency + current_latency[model_id]
+            )
             alpha, beta = profiling_data[model_id].alpha, profiling_data[model_id].beta
             try:
                 max_fps = arrival_rate_from_latency(model_max_latency, alpha, beta)
@@ -346,13 +370,16 @@ class ServingSystem:
             Dict[str, float]: mapping of model ID to maximum additional fps
         """
         remaining_cap = self.remaining_capacity(arrival_rates, profiling_data)
-        return {model_id: profiling_data[model_id].max_throughput * remaining_cap for model_id in arrival_rates}
+        return {
+            model_id: profiling_data[model_id].max_throughput * remaining_cap
+            for model_id in arrival_rates
+        }
 
     def max_additional_fps(
         self,
         arrival_rates: Dict[str, float],
         profiling_data: Dict[str, ModelProfilingData],
-        request_to_model: Dict[str, str]
+        request_to_model: Dict[str, str],
     ) -> float:
         """Given a set of parameters, return the maximum additional fps each model could receive.
 
@@ -365,14 +392,18 @@ class ServingSystem:
             Dict[str, float]: mapping of model ID to maximum additional fps
         """
         max_serving = self.max_serving_latency(request_to_model)
-        max_fps_by_latency = self.max_additional_fps_by_latency(arrival_rates, profiling_data, max_serving)
-        max_fps_by_cap = self.max_additional_fps_by_capacity(arrival_rates, profiling_data)
-        return {model_id: min(max_fps_by_latency[model_id], max_fps_by_cap[model_id]) for model_id in arrival_rates}
+        max_fps_by_latency = self.max_additional_fps_by_latency(
+            arrival_rates, profiling_data, max_serving
+        )
+        max_fps_by_cap = self.max_additional_fps_by_capacity(
+            arrival_rates, profiling_data
+        )
+        return {
+            model_id: min(max_fps_by_latency[model_id], max_fps_by_cap[model_id])
+            for model_id in arrival_rates
+        }
 
-    def max_additional_fps_current(
-        self,
-        server: Server
-    ) -> Dict[str, float]:
+    def max_additional_fps_current(self, server: Server) -> Dict[str, float]:
         """Return the maximum additional FPS each model on a server could receive without violating any constraints.
 
         Args:
@@ -389,10 +420,7 @@ class ServingSystem:
                 request_to_model[request_id] = self.sessions[request_id].model_id
         return self.max_additional_fps(arrival_rates, profiling_data, request_to_model)
 
-    def max_additional_fps_at_minimum(
-        self,
-        server: Server
-    ) -> Dict[str, float]:
+    def max_additional_fps_at_minimum(self, server: Server) -> Dict[str, float]:
         """Return the maximum additional FPS each model on a server could receive when server operating at minimum load.
 
         Args:
@@ -405,7 +433,6 @@ class ServingSystem:
         profiling_data = server.profiling_data
         request_to_model = server.request_to_min_model
         return self.max_additional_fps(arrival_rates, profiling_data, request_to_model)
-
 
     def model_serving_latencies(
         self,
@@ -424,7 +451,9 @@ class ServingSystem:
         serving_latencies = {}
         for model_id, lamda in arrival_rates.items():
             alpha, beta = profiling_data[model_id].alpha, profiling_data[model_id].beta
-            serving_latencies[model_id] = estimate_model_serving_latency(lamda, alpha, beta)
+            serving_latencies[model_id] = estimate_model_serving_latency(
+                lamda, alpha, beta
+            )
         return serving_latencies
 
     def total_serving_latency(
@@ -444,7 +473,10 @@ class ServingSystem:
         total_latency = 0.0
         for model_id, lamda in arrival_rates.items():
             if lamda > 0.0:
-                alpha, beta = profiling_data[model_id].alpha, profiling_data[model_id].beta
+                alpha, beta = (
+                    profiling_data[model_id].alpha,
+                    profiling_data[model_id].beta,
+                )
                 total_latency += estimate_model_serving_latency(lamda, alpha, beta)
         return total_latency
 
@@ -510,7 +542,9 @@ class ServingSystem:
             self.models[new_model.id] = new_model
             self.models_by_accuracy.add(new_model)
             self.servers_by_model[new_model.id] = sortedcollections.ValueSortedDict()
-            self.servers_by_model_min[new_model.id] = sortedcollections.ValueSortedDict()
+            self.servers_by_model_min[
+                new_model.id
+            ] = sortedcollections.ValueSortedDict()
             return True
         else:
             return False

@@ -240,7 +240,9 @@ def test_set_session_valid(
     system, session_config = example_valid_session_setup
     request = system.requests[session_config.request_id]
     server = system.servers[session_config.server_id]
-    expected_model = system.find_min_accuracy_model(request.min_accuracy, server.models_served)
+    expected_model = system.find_min_accuracy_model(
+        request.min_accuracy, server.models_served
+    )
     model_id = session_config.model_id
 
     # Test
@@ -302,7 +304,9 @@ def test_set_session_request_to_min_model(
     system, session_config = example_valid_session_setup
     request = system.requests[session_config.request_id]
     server = system.servers[session_config.server_id]
-    expected_model = system.find_min_accuracy_model(request.min_accuracy, server.models_served)
+    expected_model = system.find_min_accuracy_model(
+        request.min_accuracy, server.models_served
+    )
 
     # Test
     assert request.id not in server.request_to_min_model
@@ -328,6 +332,7 @@ def test_clear_session(
     assert request.id not in server.request_to_min_model
     assert server.arrival_rate[model_id] == 0.0
     assert server.min_arrival_rate[min_model_id] == 0.0
+
 
 # CONSTRAINT TESTS
 def test_throughput_constraint_1_request(
@@ -612,10 +617,11 @@ def test_remaining_capacity(
     assert system.remaining_capacity(arrival_rates, profiling_data) == 1.0
     assert system.set_session(session_config)
     expected_remaining = (
-        1.0
-        - arrival_rates[model_id] / profiling_data[model_id].max_throughput
+        1.0 - arrival_rates[model_id] / profiling_data[model_id].max_throughput
     )
-    assert system.remaining_capacity(arrival_rates, profiling_data) == expected_remaining
+    assert (
+        system.remaining_capacity(arrival_rates, profiling_data) == expected_remaining
+    )
 
 
 def test_max_additional_fps_by_latency(
@@ -633,17 +639,21 @@ def test_max_additional_fps_by_latency(
     alpha, beta = profiling_data.alpha, profiling_data.beta
 
     # Test
-    max_serving = (request.max_latency
-        - estimate_transmission_latency(
-            system.models[model_id].input_size, request.transmission_speed
-        ))
+    max_serving = request.max_latency - estimate_transmission_latency(
+        system.models[model_id].input_size, request.transmission_speed
+    )
     max_fps = arrival_rate_from_latency(
         max_serving,
         alpha,
         beta,
     )
     expected = max_fps - request.arrival_rate
-    assert system.max_additional_fps_by_latency(server.arrival_rate, server.profiling_data, max_serving)[model_id] == expected
+    assert (
+        system.max_additional_fps_by_latency(
+            server.arrival_rate, server.profiling_data, max_serving
+        )[model_id]
+        == expected
+    )
 
 
 def test_max_additional_fps_by_capacity(
@@ -659,7 +669,10 @@ def test_max_additional_fps_by_capacity(
     profiling_data = server.profiling_data
 
     # Test
-    assert system.max_additional_fps_by_capacity(arrival_rates, profiling_data)[model_id] == max_thru
+    assert (
+        system.max_additional_fps_by_capacity(arrival_rates, profiling_data)[model_id]
+        == max_thru
+    )
     assert system.set_session(session_config)
     assert (
         system.max_additional_fps_by_capacity(arrival_rates, profiling_data)[model_id]
@@ -675,16 +688,31 @@ def test_update_additional_fps(
     server = system.servers[session_config.server_id]
     model_id = session_config.model_id
     request = system.requests[session_config.request_id]
-    min_model = system.find_min_accuracy_model(request.min_accuracy, server.models_served)
+    min_model = system.find_min_accuracy_model(
+        request.min_accuracy, server.models_served
+    )
 
     # Test
     system.update_additional_fps(server)
-    assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps_current(server)[model_id]
-    assert system.servers_by_model_min[min_model][server.id] == system.max_additional_fps_at_minimum(server)[min_model]
+    assert (
+        system.servers_by_model[session_config.model_id][server.id]
+        == system.max_additional_fps_current(server)[model_id]
+    )
+    assert (
+        system.servers_by_model_min[min_model][server.id]
+        == system.max_additional_fps_at_minimum(server)[min_model]
+    )
     assert system.set_session(session_config)
     system.update_additional_fps(server)
-    assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps_current(server)[model_id]
-    assert system.servers_by_model_min[min_model][server.id] == system.max_additional_fps_at_minimum(server)[min_model]
+    assert (
+        system.servers_by_model[session_config.model_id][server.id]
+        == system.max_additional_fps_current(server)[model_id]
+    )
+    assert (
+        system.servers_by_model_min[min_model][server.id]
+        == system.max_additional_fps_at_minimum(server)[min_model]
+    )
+
 
 @pytest.mark.parametrize(
     "min_acc, models, expected",
@@ -692,13 +720,10 @@ def test_update_additional_fps(
         (0.0, ["mobilenet", "efficientd0", "efficientd1"], "mobilenet"),
         (0.35, ["mobilenet", "efficientd0", "efficientd1"], "efficientd1"),
         (0.50, ["mobilenet", "efficientd0", "efficientd1"], None),
-    ]
+    ],
 )
 def test_find_min_accuracy_model(
-    example_system: ServingSystem,
-    min_acc: float,
-    models: List[str],
-    expected: str
+    example_system: ServingSystem, min_acc: float, models: List[str], expected: str
 ):
     # Test
     assert example_system.find_min_accuracy_model(min_acc, models) == expected
@@ -710,8 +735,10 @@ def test_max_fps_at_minimum(
     # Setup
     system, session_config = example_valid_session_setup
     server = system.servers[session_config.server_id]
-    request =  system.requests[session_config.request_id]
-    min_model = system.find_min_accuracy_model(request.min_accuracy, server.models_served)
+    request = system.requests[session_config.request_id]
+    min_model = system.find_min_accuracy_model(
+        request.min_accuracy, server.models_served
+    )
     max_thru = server.profiling_data[min_model].max_throughput
 
     # Test
@@ -722,5 +749,7 @@ def test_max_fps_at_minimum(
     request_to_model = {request.id: min_model}
     assert (
         system.max_additional_fps_at_minimum(server)[min_model]
-        == system.max_additional_fps(arrival_rates, profiling_data, request_to_model)[min_model]
+        == system.max_additional_fps(arrival_rates, profiling_data, request_to_model)[
+            min_model
+        ]
     )
