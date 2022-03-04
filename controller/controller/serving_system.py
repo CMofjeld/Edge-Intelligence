@@ -388,6 +388,24 @@ class ServingSystem:
                 request_to_model[request_id] = self.sessions[request_id].model_id
         return self.max_additional_fps(arrival_rates, profiling_data, request_to_model)
 
+    def max_additional_fps_at_minimum(
+        self,
+        server: Server
+    ) -> Dict[str, float]:
+        """Return the maximum additional FPS each model on a server could receive when server operating at minimum load.
+
+        Args:
+            server(Server): the server serving the models
+
+        Returns:
+            Dict[str, float]: mapping of model ID to maximum additional fps
+        """
+        arrival_rates = server.min_arrival_rate
+        profiling_data = server.profiling_data
+        request_to_model = server.request_to_min_model
+        return self.max_additional_fps(arrival_rates, profiling_data, request_to_model)
+
+
     def model_serving_latencies(
         self,
         arrival_rates: Dict[str, float],

@@ -695,3 +695,25 @@ def test_find_min_accuracy_model(
 ):
     # Test
     assert example_system.find_min_accuracy_model(min_acc, models) == expected
+
+
+def test_max_fps_at_minimum(
+    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
+):
+    # Setup
+    system, session_config = example_valid_session_setup
+    server = system.servers[session_config.server_id]
+    request =  system.requests[session_config.request_id]
+    min_model = system.find_min_accuracy_model(request.min_accuracy, server.models_served)
+    max_thru = server.profiling_data[min_model].max_throughput
+
+    # Test
+    assert system.max_additional_fps_at_minimum(server)[min_model] == max_thru
+    assert system.set_session(session_config)
+    arrival_rates = server.min_arrival_rate
+    profiling_data = server.profiling_data
+    request_to_model = {request.id: min_model}
+    assert (
+        system.max_additional_fps_at_minimum(server)[min_model]
+        == system.max_additional_fps(arrival_rates, profiling_data, request_to_model)[min_model]
+    )
