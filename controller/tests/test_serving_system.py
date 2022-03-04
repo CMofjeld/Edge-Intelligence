@@ -315,6 +315,7 @@ def test_throughput_constraint_2_requests_same_model_invalid(
     server.profiling_data[model_id].max_throughput = (
         request1.arrival_rate + request2.arrival_rate - 0.01
     )
+    system.update_additional_fps(server)
 
     # Test
     assert not system.set_session(session_config2)
@@ -359,6 +360,7 @@ def test_throughput_constraint_2_requests_different_model_valid(
         estimate_transmission_latency(model2.input_size, request2.transmission_speed)
         + serving_latency * 2
     )
+    system.update_additional_fps(server)
 
     # Test
     assert system.set_session(session_config2)
@@ -556,53 +558,15 @@ def test_remaining_capacity(
     model_id = session_config.model_id
 
     # Test
-    assert system.remaining_capacity(server) == 1.0
+    arrival_rates = server.arrival_rate
+    profiling_data = server.profiling_data
+    assert system.remaining_capacity(arrival_rates, profiling_data) == 1.0
     assert system.set_session(session_config)
     expected_remaining = (
         1.0
-        - server.arrival_rate[model_id] / server.profiling_data[model_id].max_throughput
+        - arrival_rates[model_id] / profiling_data[model_id].max_throughput
     )
-    assert system.remaining_capacity(server) == expected_remaining
-
-
-def test_slack_latency_request(
-    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
-):
-    # Setup
-    system, session_config = example_valid_session_setup
-    assert system.set_session(session_config)
-    request_id = session_config.request_id
-
-    # Test
-    max_latency = system.requests[request_id].max_latency
-    latency = system.metrics[request_id].latency
-    expected_slack = max_latency - latency
-    assert system.slack_latency_request(request_id) == expected_slack
-
-
-def test_slack_latency_server(
-    example_valid_session_setup_2_requests: Tuple[
-        ServingSystem, SessionConfiguration, SessionConfiguration
-    ]
-):
-    # Setup
-    system, session_config1, session_config2 = example_valid_session_setup_2_requests
-    server_id = session_config1.server_id
-    server = system.servers[server_id]
-    request1 = system.requests[session_config1.request_id]
-    request2 = system.requests[session_config2.request_id]
-    request1.max_latency = request2.max_latency + 0.1
-
-    # Test
-    assert system.slack_latency_server(server) == float("inf")
-    assert system.set_session(session_config1)
-    assert system.slack_latency_server(server) == system.slack_latency_request(
-        request1.id
-    )
-    assert system.set_session(session_config2)
-    assert system.slack_latency_server(server) == system.slack_latency_request(
-        request2.id
-    )
+    assert system.remaining_capacity(arrival_rates, profiling_data) == expected_remaining
 
 
 def test_max_additional_fps_by_latency(
@@ -620,16 +584,17 @@ def test_max_additional_fps_by_latency(
     alpha, beta = profiling_data.alpha, profiling_data.beta
 
     # Test
-    max_fps = arrival_rate_from_latency(
-        request.max_latency
+    max_serving = (request.max_latency
         - estimate_transmission_latency(
             system.models[model_id].input_size, request.transmission_speed
-        ),
+        ))
+    max_fps = arrival_rate_from_latency(
+        max_serving,
         alpha,
         beta,
     )
     expected = max_fps - request.arrival_rate
-    assert system.max_additional_fps_by_latency(server, model_id) == expected
+    assert system.max_additional_fps_by_latency(server.arrival_rate, server.profiling_data, max_serving)[model_id] == expected
 
 
 def test_max_additional_fps_by_capacity(
@@ -641,12 +606,14 @@ def test_max_additional_fps_by_capacity(
     model_id = session_config.model_id
     max_thru = server.profiling_data[model_id].max_throughput
     arrival_rate = system.requests[session_config.request_id].arrival_rate
+    arrival_rates = server.arrival_rate
+    profiling_data = server.profiling_data
 
     # Test
-    assert system.max_additional_fps_by_capacity(server, model_id) == max_thru
+    assert system.max_additional_fps_by_capacity(arrival_rates, profiling_data)[model_id] == max_thru
     assert system.set_session(session_config)
     assert (
-        system.max_additional_fps_by_capacity(server, model_id)
+        system.max_additional_fps_by_capacity(arrival_rates, profiling_data)[model_id]
         == max_thru - arrival_rate
     )
 
@@ -661,7 +628,7 @@ def test_update_additional_fps(
 
     # Test
     system.update_additional_fps(server)
-    assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps(server, model_id)
+    assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps_current(server)[model_id]
     assert system.set_session(session_config)
     system.update_additional_fps(server)
-    assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps(server, model_id)
+    assert system.servers_by_model[session_config.model_id][server.id] == system.max_additional_fps_current(server)[model_id]

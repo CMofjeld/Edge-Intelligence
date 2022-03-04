@@ -166,17 +166,9 @@ class ServingSystem:
         if server_id not in self.servers:
             raise Exception("invalid server ID")
         server = self.servers[server_id]
-        combined_latency = 0.0
+        total_serving = self.total_serving_latency(server.arrival_rate, server.profiling_data)
         for model_id in server.models_served:
-            if server.arrival_rate[model_id] > 0:
-                profiling_data = server.profiling_data[model_id]
-                combined_latency += estimate_model_serving_latency(
-                    server.arrival_rate[model_id],
-                    profiling_data.alpha,
-                    profiling_data.beta,
-                )
-        for model_id in server.models_served:
-            server.serving_latency[model_id] = combined_latency
+            server.serving_latency[model_id] = total_serving
 
     def is_valid_config(self, session_config: SessionConfiguration) -> bool:
         """Determine whether a given session configuration satisfies the system's constraints.
@@ -222,7 +214,7 @@ class ServingSystem:
             server.arrival_rate[previous_model] -= request.arrival_rate
 
         # Throughput constraint
-        if request.arrival_rate > self.max_additional_fps(server, model_id):
+        if request.arrival_rate > self.max_additional_fps_current(server)[model_id]:
             if restore_original:
                 server.arrival_rate[previous_model] += request.arrival_rate
             return False
@@ -245,69 +237,157 @@ class ServingSystem:
         # All constraints satisfied
         return True
 
-    def remaining_capacity(self, server: Server) -> float:
-        """Return the remaining capacity for a given server."""
+    def remaining_capacity(
+        self,
+        arrival_rates: Dict[str, float],
+        profiling_data: Dict[str, ModelProfilingData],
+    ) -> float:
+        """Return the remaining capacity for a Server given a set of arrival rates and profiling data.
+
+        Args:
+            arrival_rates (Dict[str, float]): dictionary mapping model IDs to arrival rates
+            profiling_data (Dict[str, ModelProfilingData]): dictionary mapping model IDs to profiling data
+
+        Returns:
+            float: estimated remaining capacity
+        """
         return 1.0 - sum(
             [
-                server.arrival_rate[model_id]
-                / server.profiling_data[model_id].max_throughput
-                for model_id in server.models_served
+                arrival_rates[model_id]
+                / profiling_data[model_id].max_throughput
+                for model_id in arrival_rates
             ]
         )
 
-    def slack_latency_server(self, server: Server) -> float:
-        """Return the maximum amount the serving latency on the server can increase without violating latency SLOs."""
-        if len(server.requests_served):
-            return min(
-                [
-                    self.slack_latency_request(request_id)
-                    for request_id in server.requests_served
-                ]
-            )
-        else:
-            return float("inf")
+    def max_serving_latency_single(self, transmission_speed: float, input_size: float, max_total_latency: float) -> float:
+        """Return maximum serving latency given a transmission speed, input size, and maximum total latency."""
+        return max_total_latency - estimate_transmission_latency(input_size, transmission_speed)
+    
+    def max_serving_latency(self, request_to_model: Dict[str, str]) -> float:
+        """Return the maximum serving latency for a server given a mapping of requests to models."""
+        max_serving = float("inf")
+        for request_id, model_id in request_to_model.items():
+            request = self.requests[request_id]
+            max_latency = request.max_latency
+            transmission_speed = request.transmission_speed
+            model = self.models[model_id]
+            input_size = model.input_size
+            max_serving = min(max_serving, self.max_serving_latency_single(transmission_speed, input_size, max_latency))
+        return max_serving
 
-    def slack_latency_request(self, request_id: str) -> float:
-        """Return the difference between the request's latency SLO and its current expected latency."""
-        return self.requests[request_id].max_latency - self.metrics[request_id].latency
+    def max_additional_fps_by_latency(
+        self,
+        arrival_rates: Dict[str, float],
+        profiling_data: Dict[str, ModelProfilingData],
+        max_serving: float
+    ) -> Dict[str, float]:
+        """Return the maximum additional FPS a given model could receive without violating latency SLOs.
 
-    def max_additional_fps_by_latency(self, server: Server, model_id: str) -> float:
-        """Return the maximum additional FPS a given model could receive without violating latency SLOs."""
+        Args:
+            arrival_rates (Dict[str, float]): dictionary mapping model IDs to arrival rates
+            profiling_data (Dict[str, ModelProfilingData]): dictionary mapping model IDS to profiling data
+            max_serving (float): maximum allowable serving latency
+
+        Returns:
+            Dict[str, float]: mapping of model ID to maximum additional fps
+        """
         # Check for no restriction on latency
-        if self.slack_latency_server(server) == float("inf"):
-            return float("inf")
+        if max_serving == float("inf"):
+            return {model_id: float("inf") for model_id in arrival_rates}
 
-        # Find maximum latency for the given model
-        max_total_latency = server.serving_latency[
-            model_id
-        ] + self.slack_latency_server(server)
-        profiling_data = server.profiling_data[model_id]
-        alpha, beta = profiling_data.alpha, profiling_data.beta
-        cur_fps = server.arrival_rate[model_id]
-        cur_model_latency = estimate_model_serving_latency(cur_fps, alpha, beta)
-        latency_from_others = server.serving_latency[model_id] - cur_model_latency
-        max_latency = max_total_latency - latency_from_others
+        # Find current serving latency for each model
+        current_latency = self.model_serving_latencies(arrival_rates, profiling_data)
+        total_current_latency = sum(list(current_latency.values()))
 
-        # Find the maximum arrival rate for the model that will result in its max latency
-        try:
-            max_fps = arrival_rate_from_latency(max_latency, alpha, beta)
-        except ValueError:
-            return 0.0  # no arrival rate > 0 will result in a latency that low
+        # Find the maximum arrival rate for each model that will result in max latency
+        model_to_max_fps = {}
+        for model_id in profiling_data:
+            model_max_latency = max_serving - total_current_latency + current_latency[model_id]
+            alpha, beta = profiling_data[model_id].alpha, profiling_data[model_id].beta
+            try:
+                max_fps = arrival_rate_from_latency(model_max_latency, alpha, beta)
+            except ValueError:
+                max_fps = 0.0  # no arrival rate > 0 will result in a latency that low
+            model_to_max_fps[model_id] = max(max_fps - arrival_rates[model_id], 0.0)
+        return model_to_max_fps
 
-        # Return difference between max and current arrival rate
-        return max_fps - cur_fps
+    def max_additional_fps_by_capacity(
+        self,
+        arrival_rates: Dict[str, float],
+        profiling_data: Dict[str, ModelProfilingData],
+    ) -> Dict[str, float]:
+        """Return the maximum additional FPS each model could receive without violating server capacity.
 
-    def max_additional_fps_by_capacity(self, server: Server, model_id: str) -> float:
-        """Return the maximum additional FPS a given model could receive without violating server capacity."""
-        max_thru = server.profiling_data[model_id].max_throughput
-        return max_thru * self.remaining_capacity(server)
+        Args:
+            arrival_rates (Dict[str, float]): dictionary mapping model IDs to arrival rates
+            profiling_data (Dict[str, ModelProfilingData]): dictionary mapping model IDS to profiling data
 
-    def max_additional_fps(self, server: Server, model_id: str) -> float:
-        """Return the maximum additional FPS a given model could receive without violating any constraints."""
-        return min(
-            self.max_additional_fps_by_capacity(server, model_id),
-            self.max_additional_fps_by_latency(server, model_id),
-        )
+        Returns:
+            Dict[str, float]: mapping of model ID to maximum additional fps
+        """
+        remaining_cap = self.remaining_capacity(arrival_rates, profiling_data)
+        return {model_id: profiling_data[model_id].max_throughput * remaining_cap for model_id in arrival_rates}
+
+    def max_additional_fps(
+        self,
+        arrival_rates: Dict[str, float],
+        profiling_data: Dict[str, ModelProfilingData],
+        request_to_model: Dict[str, str]
+    ) -> float:
+        """Given a set of parameters, return the maximum additional fps each model could receive.
+
+        Args:
+            arrival_rates (Dict[str, float]): dictionary mapping model IDs to arrival rates
+            profiling_data (Dict[str, ModelProfilingData]): dictionary mapping model IDS to profiling data
+            request_to_model(Dict[str, str]): dictionary mapping request ID to ID of model it's served with
+
+        Returns:
+            Dict[str, float]: mapping of model ID to maximum additional fps
+        """
+        max_serving = self.max_serving_latency(request_to_model)
+        max_fps_by_latency = self.max_additional_fps_by_latency(arrival_rates, profiling_data, max_serving)
+        max_fps_by_cap = self.max_additional_fps_by_capacity(arrival_rates, profiling_data)
+        return {model_id: min(max_fps_by_latency[model_id], max_fps_by_cap[model_id]) for model_id in arrival_rates}
+
+    def max_additional_fps_current(
+        self,
+        server: Server
+    ) -> Dict[str, float]:
+        """Return the maximum additional FPS each model on a server could receive without violating any constraints.
+
+        Args:
+            server(Server): the server serving the models
+
+        Returns:
+            Dict[str, float]: mapping of model ID to maximum additional fps
+        """
+        arrival_rates = server.arrival_rate
+        profiling_data = server.profiling_data
+        request_to_model = {}
+        for request_id in server.requests_served:
+            if request_id in self.sessions:
+                request_to_model[request_id] = self.sessions[request_id].model_id
+        return self.max_additional_fps(arrival_rates, profiling_data, request_to_model)
+
+    def model_serving_latencies(
+        self,
+        arrival_rates: Dict[str, float],
+        profiling_data: Dict[str, ModelProfilingData],
+    ) -> Dict[str, float]:
+        """Return the serving latency for each model given a set of arrival rates.
+
+        Args:
+            arrival_rates (Dict[str, float]): dictionary mapping model IDs to arrival rates
+            profiling_data (Dict[str, ModelProfilingData]): dictionary mapping model IDS to profiling data
+
+        Returns:
+            Dict[str, float]: mapping of model ID to estimated serving latency
+        """
+        serving_latencies = {}
+        for model_id, lamda in arrival_rates.items():
+            alpha, beta = profiling_data[model_id].alpha, profiling_data[model_id].beta
+            serving_latencies[model_id] = estimate_model_serving_latency(lamda, alpha, beta)
+        return serving_latencies
 
     def total_serving_latency(
         self,
@@ -325,15 +405,16 @@ class ServingSystem:
         """
         total_latency = 0.0
         for model_id, lamda in arrival_rates.items():
-            alpha, beta = profiling_data[model_id].alpha, profiling_data[model_id].beta
-            total_latency += estimate_model_serving_latency(lamda, alpha, beta)
+            if lamda > 0.0:
+                alpha, beta = profiling_data[model_id].alpha, profiling_data[model_id].beta
+                total_latency += estimate_model_serving_latency(lamda, alpha, beta)
         return total_latency
 
     def update_additional_fps(self, server: Server) -> None:
         """Recalculate max additional FPS for each model on server and update servers_by_model table."""
-        for model_id in server.models_served:
-            additional_fps = self.max_additional_fps(server, model_id)
-            self.servers_by_model[model_id][server.id] = additional_fps
+        additional_fps = self.max_additional_fps_current(server)
+        for model_id, fps in additional_fps.items():
+            self.servers_by_model[model_id][server.id] = fps
 
     def add_request(self, new_request: SessionRequest) -> bool:
         """Add a new session request to the table of requests.
