@@ -1,4 +1,5 @@
 """Unit tests for greedy heuristic algorithms."""
+import copy
 import pytest
 import sortedcollections
 from controller.cost_calculator import ESquaredCost
@@ -161,6 +162,36 @@ def test_pa_latency_check(
 
     # Test
     assert pa.best_config(example_request, example_system) == None
+
+
+@pytest.mark.parametrize(
+    "arrival_rate1, session1, arrival_rate2, minimum, expected",
+    [
+        (0.5, SessionConfiguration("example_request", "agx1", "efficientd1"), 2.25, True, SessionConfiguration("example_request2", "agx1", "mobilenet")),
+        (0.5, SessionConfiguration("example_request", "agx1", "efficientd1"), 2.25, False, None),
+    ],
+)
+def test_pa_minimum(
+    example_system: ServingSystem,
+    example_request: SessionRequest,
+    arrival_rate1: float,
+    session1: SessionConfiguration,
+    arrival_rate2: float,
+    minimum: bool,
+    expected: SessionConfiguration,
+):
+    # Setup
+    example_request.arrival_rate = arrival_rate1
+    request2 = copy.deepcopy(example_request)
+    request2.id = example_request.id + "2"
+    request2.arrival_rate = arrival_rate2
+    pa = PlacementAlgorithm(minimum=minimum)
+    example_system.add_request(example_request)
+
+    # Test
+    assert example_system.set_session(session1)
+    session2 = pa.best_config(request2, example_system)
+    assert session2 == expected
 
 
 # ITERATIVE PROMOTER TESTS

@@ -236,7 +236,7 @@ class IterativePromoter(ServerSessionAdjuster):
 class PlacementAlgorithm(OnlineAlgorithm):
     """Heuristic algorithm that traverses ServingSystem's sorted collections."""
 
-    def __init__(self, acc_ascending: bool = True, fps_ascending: bool = True) -> None:
+    def __init__(self, acc_ascending: bool = True, fps_ascending: bool = True, minimum: bool = False) -> None:
         """Sets initial configuration for the algorithm.
 
         Args:
@@ -244,9 +244,12 @@ class PlacementAlgorithm(OnlineAlgorithm):
                 When false, models are considered from higher accuracy to lower. Defaults to True.
             fps_ascending (bool, optional): When true, servers are considered from lower additional fps to
                 higher. When false, models are considered from higher additional fps to lower. Defaults to True.
+            minimum (bool, optional): When true, the algorithm will use minimum server loads instead of
+                current loads when considering routes. Defaults to False.
         """
         self.set_acc_ascending(acc_ascending)
         self.set_fps_ascending(fps_ascending)
+        self.minimum = minimum
 
     def set_acc_ascending(self, acc_ascending: bool) -> None:
         """Set the value for acc_ascending."""
@@ -272,7 +275,10 @@ class PlacementAlgorithm(OnlineAlgorithm):
             max_serving = request.max_latency - tx_latency
 
             # Traverse servers
-            servers = serving_system.servers_by_model[models[i].id]
+            if self.minimum:
+                servers = serving_system.servers_by_model_min[models[i].id]
+            else:
+                servers = serving_system.servers_by_model[models[i].id]
             serv_range = self._get_range(
                 servers, request.arrival_rate, self.fps_ascending
             )
@@ -280,7 +286,10 @@ class PlacementAlgorithm(OnlineAlgorithm):
             for j in serv_range:
                 # Check if latency constraint for request is satisfied
                 server = serving_system.servers[server_ids[j]]
-                arrival_rate_dict = copy.deepcopy(server.arrival_rate)
+                if self.minimum:
+                    arrival_rate_dict = copy.deepcopy(server.min_arrival_rate)
+                else:
+                    arrival_rate_dict = copy.deepcopy(server.arrival_rate)
                 arrival_rate_dict[model_id] += request.arrival_rate
                 profiling_data = server.profiling_data
                 if (
