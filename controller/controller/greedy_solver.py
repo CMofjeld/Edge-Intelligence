@@ -46,50 +46,6 @@ class GreedyOnlineAlgorithm(OnlineAlgorithm):
         return best_config
 
 
-class GreedyOfflineAlgorithm(ServingSolver):
-    """Solver that uses a greedy algorithm to solve inference serving problems."""
-
-    def __init__(
-        self, request_sorter: RequestSorter, online_algo: OnlineAlgorithm
-    ) -> None:
-        super().__init__()
-        self._request_sorter = request_sorter
-        self._online_algo = online_algo
-
-    def solve(self, serving_system: ServingSystem) -> Dict[str, SessionConfiguration]:
-        """Find a solution to the inference serving problem with the specified parameters.
-
-        TODO
-
-        Args:
-            serving_system (ServingSystem): model of the inference serving problem instance
-
-        Returns:
-            Dict[str, SessionConfiguration]: solution mapping request IDs to their configurations
-        """
-        # Ensure no previous session configurations are set
-        serving_system.clear_all_sessions()
-
-        # Sort list of requests
-        sorted_requests = self._request_sorter.sort(serving_system)
-
-        # Assign routes one-by-one
-        for request in sorted_requests:
-            # Find the configuration that yields the best cost for this request
-            best_config = self._online_algo.best_config(request, serving_system)
-            if best_config:
-                serving_system.set_session(best_config)
-
-        # Copy the solution
-        solution = copy.deepcopy(serving_system.sessions)
-
-        # Reset the system
-        serving_system.clear_all_sessions()
-
-        # Return the result
-        return solution
-
-
 class GreedyBacktrackingSolver:
     """Solver that uses a greedy algorithm plus backtracking to solve inference serving problems."""
 
@@ -203,34 +159,30 @@ class IterativePromoter(ServerSessionAdjuster):
         requests = [
             serving_system.requests[request_id] for request_id in server.requests_served
         ]
-        for request_id in server.requests_served:
-            serving_system.clear_session(request_id)
+        for request in requests:
+            serving_system.clear_session(request.id)
         if additional_request:
             requests.append(additional_request)
 
         # Get available models by accuracy
-        models = sortedcollections.SortedListWithKey(
-            [serving_system.models[model_id] for model_id in server.models_served],
-            key=lambda model: model.accuracy,
-        )
+        models = [model.id for model in serving_system.models_by_accuracy if model.id in server.models_served]
 
         # Place requests at lowest feasible accuracy
-        requests_by_acc = sortedcollections.ValueSortedDict()
+        requests_by_rate = sortedcollections.ValueSortedDict()
         for request in requests:
-            lowest = models.bisect_key_left(request.min_accuracy)
-            assert serving_system.set_session(SessionConfiguration(request.id, server.id, models[lowest].id))
-            if lowest < len(models) - 1: # not at highest accuracy yet
-                requests_by_acc[request.id] = (lowest, request.arrival_rate)
+            assert serving_system.set_session(SessionConfiguration(request.id, server.id, models[0]))
+            if len(models) > 1: # not at highest accuracy yet
+                requests_by_rate[request.id] = (request.arrival_rate, 0)
 
         # Iteratively bring up the lowest accuracy requests
-        while len(requests_by_acc):
-            request_id, (prev_idx, _) = requests_by_acc.popitem(0)
+        while len(requests_by_rate):
+            request_id, (_, prev_idx) = requests_by_rate.popitem(0)
             next_idx = prev_idx + 1
-            next_model_id = models[next_idx].id
+            next_model_id = models[next_idx]
             if serving_system.set_session(SessionConfiguration(request_id, server.id, next_model_id)):
                 # Successfully promoted the request
                 if next_idx < len(models) - 1: # not at highest accuracy yet
-                    requests_by_acc[request_id] = (next_idx, serving_system.requests[request_id].arrival_rate)
+                    requests_by_rate[request_id] = (serving_system.requests[request_id].arrival_rate, next_idx)
 
 
 class PlacementAlgorithm(OnlineAlgorithm):
@@ -324,3 +276,104 @@ class PlacementAlgorithm(OnlineAlgorithm):
             stop = sorted_collection.bisect_key_left(key) - 1
             inc = -1
         return range(start, stop, inc)
+
+
+class GreedyOfflineAlgorithm(ServingSolver):
+    """Solver that uses a greedy algorithm to solve inference serving problems."""
+
+    def __init__(
+        self, request_sorter: RequestSorter, online_algo: OnlineAlgorithm, adjuster: ServerSessionAdjuster = None
+    ) -> None:
+        super().__init__()
+        self._request_sorter = request_sorter
+        self._online_algo = online_algo
+        self._adjuster = adjuster
+
+    def solve(self, serving_system: ServingSystem) -> Dict[str, SessionConfiguration]:
+        """Find a solution to the inference serving problem with the specified parameters.
+
+        TODO
+
+        Args:
+            serving_system (ServingSystem): model of the inference serving problem instance
+
+        Returns:
+            Dict[str, SessionConfiguration]: solution mapping request IDs to their configurations
+        """
+        # Ensure no previous session configurations are set
+        serving_system.clear_all_sessions()
+
+        # Sort list of requests
+        sorted_requests = self._request_sorter.sort(serving_system)
+
+        # Assign routes one-by-one
+        for request in sorted_requests:
+            # Find the configuration that yields the best cost for this request
+            best_config = self._online_algo.best_config(request, serving_system)
+            if best_config:
+                if not serving_system.set_session(best_config) and self._adjuster:
+                    server = serving_system.servers[best_config.server_id]
+                    self._adjuster.adjust_sessions(server, serving_system, request)
+                # else:
+                #     assert serving_system.set_session(best_config)
+                assert request.id in serving_system.sessions
+
+        # Copy the solution
+        solution = copy.deepcopy(serving_system.sessions)
+
+        # Reset the system
+        serving_system.clear_all_sessions()
+
+        # Return the result
+        return solution
+
+
+class GreedyOfflineAlgorithm2(ServingSolver):
+    """Solver that uses a greedy algorithm to solve inference serving problems."""
+
+    def __init__(
+        self, request_sorter: RequestSorter, online_algo1: OnlineAlgorithm, online_algo2: OnlineAlgorithm, adjuster: ServerSessionAdjuster = None
+    ) -> None:
+        super().__init__()
+        self._request_sorter = request_sorter
+        self._online_algo1 = online_algo1
+        self._online_algo2 = online_algo2
+        self._adjuster = adjuster
+
+    def solve(self, serving_system: ServingSystem) -> Dict[str, SessionConfiguration]:
+        """Find a solution to the inference serving problem with the specified parameters.
+
+        TODO
+
+        Args:
+            serving_system (ServingSystem): model of the inference serving problem instance
+
+        Returns:
+            Dict[str, SessionConfiguration]: solution mapping request IDs to their configurations
+        """
+        # Ensure no previous session configurations are set
+        serving_system.clear_all_sessions()
+
+        # Sort list of requests
+        sorted_requests = self._request_sorter.sort(serving_system)
+
+        # Assign routes one-by-one
+        for request in sorted_requests:
+            # Find the configuration that yields the best cost for this request
+            best_config = self._online_algo1.best_config(request, serving_system)
+            if best_config:
+                assert serving_system.set_session(best_config)
+            else:
+                best_config = self._online_algo2.best_config(request, serving_system)
+                if best_config:
+                    server = serving_system.servers[best_config.server_id]
+                    self._adjuster.adjust_sessions(server, serving_system, request)
+
+        # Copy the solution
+        solution = copy.deepcopy(serving_system.sessions)
+
+        # Reset the system
+        serving_system.clear_all_sessions()
+
+        # Return the result
+        return solution 
