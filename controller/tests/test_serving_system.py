@@ -24,7 +24,6 @@ from controller.serving_system import (
 def example_request() -> SessionRequest:
     return SessionRequest(
         arrival_rate=1.6,
-        min_accuracy=0.2,
         transmission_speed=400.0,
         max_latency=1.0,
         id="example_request",
@@ -139,7 +138,6 @@ def example_valid_session_setup(
     example_model: Model,
     example_profiling_data: ModelProfilingData,
 ):
-    example_request.min_accuracy = example_model.accuracy
     example_request.max_latency = estimate_model_serving_latency(
         example_request.arrival_rate,
         example_profiling_data.alpha,
@@ -173,7 +171,6 @@ def example_valid_session_setup_2_requests(
     example_profiling_data: ModelProfilingData,
 ):
     request1 = example_request
-    request1.min_accuracy = example_model.accuracy
     latency = estimate_model_serving_latency(
         example_request.arrival_rate,
         example_profiling_data.alpha,
@@ -449,20 +446,6 @@ def test_throughput_constraint_2_requests_different_model_invalid(
 
     # Test
     assert not system.set_session(session_config2)
-
-
-def test_accuracy_constraint(
-    example_valid_session_setup: Tuple[ServingSystem, SessionConfiguration]
-):
-    # Setup
-    system, session_config = example_valid_session_setup
-    request_id, model_id = session_config.request_id, session_config.model_id
-    request = system.requests[request_id]
-    model = system.models[model_id]
-    request.min_accuracy = model.accuracy + 1.0
-
-    # Test
-    assert not system.set_session(session_config)
 
 
 def test_latency_constraint_1_request(

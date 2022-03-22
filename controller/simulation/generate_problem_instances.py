@@ -25,6 +25,8 @@ class RequestSpecs:
     max_arrival_rate: float
     min_transmission_speed: float
     max_transmission_speed: float
+    min_max_latency: float
+    max_max_latency: float
 
 
 @dataclasses.dataclass
@@ -222,9 +224,6 @@ def main():
             server_id = random.choice(list(available_routes))
             server = serving_system.servers[server_id]
             model_id = random.choice(available_routes[server_id])
-
-            # Set min accuracy to model's accuracy
-            request.min_accuracy = serving_system.models[model_id].accuracy
 
             # Set arrival rate based on request specs (remaining within server capacity)
             server_capacity = remaining_capacity(server)

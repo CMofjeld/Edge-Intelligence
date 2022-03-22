@@ -217,7 +217,7 @@ class PlacementAlgorithm(OnlineAlgorithm):
         """Return best valid configuration for the given request, if it exists."""
         # Traverse models
         models = serving_system.models_by_accuracy
-        mod_range = self._get_range(models, request.min_accuracy, self.acc_ascending)
+        mod_range = self._get_range(models, 0.0, self.acc_ascending)
         for i in mod_range:
             # Determine max serving latency
             model_id = models[i].id

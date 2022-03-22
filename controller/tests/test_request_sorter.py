@@ -87,14 +87,12 @@ def test_nr_request_sorter(example_system: ServingSystem):
     many_available = SessionRequest(
         id="many_available",
         arrival_rate=0.001,
-        min_accuracy=0.0,
         max_latency=float("inf"),
         transmission_speed=1e10,
     )
     none_available = SessionRequest(
         id="none_available",
         arrival_rate=1000,
-        min_accuracy=110,
         max_latency=0.001,
         transmission_speed=0.001,
     )

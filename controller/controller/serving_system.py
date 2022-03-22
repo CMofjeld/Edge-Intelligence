@@ -226,10 +226,6 @@ class ServingSystem:
         if model_id not in server.models_served:
             return False
 
-        # Accuracy constraint
-        if request.min_accuracy > model.accuracy:
-            return False
-
         # Check if request is currently served by the target server
         restore_original = (
             False  # True if we need to restore original settings before returning

@@ -70,7 +70,6 @@ def example_system() -> ServingSystem:
 def example_request() -> SessionRequest:
     return SessionRequest(
         arrival_rate=1e-6,
-        min_accuracy=0.0,
         max_latency=float("inf"),
         transmission_speed=float("inf"),
         id="example_request",
@@ -105,23 +104,19 @@ def test_pa_get_range(
 
 
 @pytest.mark.parametrize(
-    "min_acc, acc_ascending, expected",
+    "acc_ascending, expected",
     [
-        (0.0, True, SessionConfiguration("example_request", "nano1", "mobilenet")),
-        (0.0, False, SessionConfiguration("example_request", "nx1", "efficientd1")),
-        (50.0, True, None),
-        (50.0, False, None),
+        (True, SessionConfiguration("example_request", "nano1", "mobilenet")),
+        (False, SessionConfiguration("example_request", "nx1", "efficientd1")),
     ],
 )
 def test_pa_acc_ascending(
     example_system: ServingSystem,
     example_request: SessionRequest,
-    min_acc: float,
     acc_ascending: bool,
     expected: SessionConfiguration,
 ):
     # Setup
-    example_request.min_accuracy = min_acc
     pa = PlacementAlgorithm(acc_ascending=acc_ascending)
 
     # Test

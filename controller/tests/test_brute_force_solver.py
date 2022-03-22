@@ -16,7 +16,6 @@ from controller.serving_system import ServingSystem
 def example_request() -> SessionRequest:
     return SessionRequest(
         arrival_rate=1e-6,
-        min_accuracy=0.0,
         max_latency=float("inf"),
         transmission_speed=float("inf"),
         id="example_request",
@@ -126,20 +125,20 @@ def test_can_fit_1_request(
     "request1, request2, server_id, expected",
     [
         (
-            SessionRequest(arrival_rate=1e-6, min_accuracy=0.0, max_latency=float("inf"), transmission_speed=float("inf"), id="request1"),
-            SessionRequest(arrival_rate=1e-6, min_accuracy=0.0, max_latency=float("inf"), transmission_speed=float("inf"), id="request2"),
+            SessionRequest(arrival_rate=1e-6, max_latency=float("inf"), transmission_speed=float("inf"), id="request1"),
+            SessionRequest(arrival_rate=1e-6, max_latency=float("inf"), transmission_speed=float("inf"), id="request2"),
             "nano1",
             True
         ),
         (
-            SessionRequest(arrival_rate=1.6, min_accuracy=0.0, max_latency=float("inf"), transmission_speed=float("inf"), id="request1"),
-            SessionRequest(arrival_rate=1.5, min_accuracy=0.0, max_latency=float("inf"), transmission_speed=float("inf"), id="request2"),
+            SessionRequest(arrival_rate=1.6, max_latency=float("inf"), transmission_speed=float("inf"), id="request1"),
+            SessionRequest(arrival_rate=1.5, max_latency=float("inf"), transmission_speed=float("inf"), id="request2"),
             "nano1",
             False
         ),
         (
-            SessionRequest(arrival_rate=1e-6, min_accuracy=0.0, max_latency=float("inf"), transmission_speed=float("inf"), id="request1"),
-            SessionRequest(arrival_rate=1e-6, min_accuracy=0.0, max_latency=3.0, transmission_speed=0.5, id="request2"),
+            SessionRequest(arrival_rate=1e-6, max_latency=float("inf"), transmission_speed=float("inf"), id="request1"),
+            SessionRequest(arrival_rate=1e-6, max_latency=3.0, transmission_speed=0.5, id="request2"),
             "nano1",
             False
         ),

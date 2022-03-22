@@ -33,7 +33,6 @@ class SessionRequestBase:
     """Parameters of a streaming session request."""
 
     arrival_rate: float = None  # expected arrival rate of the request in frames/second
-    min_accuracy: float = None  # minimum acceptable accuracy score
     max_latency: float = None  # maximum acceptable latency
     transmission_speed: float = None  # network transmission speed for the request
 
