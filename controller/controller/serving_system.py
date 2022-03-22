@@ -48,6 +48,7 @@ class ServingSystem:
         )
         self.servers_by_model = {}
         self.servers_by_model_min = {}
+        self.min_acc_models = {}
         if models:
             for model in models:
                 self.add_model(model)
@@ -84,9 +85,7 @@ class ServingSystem:
             server.arrival_rate[new_config.model_id] += self.requests[
                 new_config.request_id
             ].arrival_rate
-            min_acc_model = self.find_min_accuracy_model(
-                request.min_accuracy, server.models_served
-            )
+            min_acc_model = self.min_acc_models[server.id]
             server.request_to_min_model[request.id] = min_acc_model
             server.min_arrival_rate[min_acc_model] += request.arrival_rate
             self.update_metrics_for_requests_served_by(new_config.server_id)
@@ -96,16 +95,9 @@ class ServingSystem:
             # Invalid configuration
             return False
 
-    def find_min_accuracy_model(self, min_accuracy: float, models: List[str]) -> str:
-        """Return the ID of the model in the list with lowest accuracy >= min_accuracy."""
-        min_acc_found = float("inf")
-        min_model_id = None
-        for model_id in models:
-            accuracy = self.models[model_id].accuracy
-            if accuracy >= min_accuracy and accuracy < min_acc_found:
-                min_model_id = model_id
-                min_acc_found = accuracy
-        return min_model_id
+    def find_min_accuracy_model(self, models: List[str]) -> str:
+        """Return the ID of the model in the list with lowest accuracy."""
+        return min(models, key=lambda model_id: self.models[model_id].accuracy)
 
     def clear_session(self, request_id: str) -> None:
         """Reset the session configuration for the request to empty and update related tables.
@@ -258,8 +250,10 @@ class ServingSystem:
         arrival_rate_dict = copy.deepcopy(server.arrival_rate)
         arrival_rate_dict[model_id] += request.arrival_rate
         profiling_data = server.profiling_data
+        total_serving = self.total_serving_latency(arrival_rate_dict, profiling_data)
+        request_latency = estimate_transmission_latency(model.input_size, request.transmission_speed) + total_serving
         if (
-            self.total_serving_latency(arrival_rate_dict, profiling_data)
+            request_latency
             > request.max_latency
         ):
             latency_violated = True
@@ -563,6 +557,7 @@ class ServingSystem:
         """
         if new_server.id not in self.servers:
             self.servers[new_server.id] = new_server
+            self.min_acc_models[new_server.id] = self.find_min_accuracy_model(new_server.models_served)
             self.update_additional_fps(new_server)
             return True
         else:

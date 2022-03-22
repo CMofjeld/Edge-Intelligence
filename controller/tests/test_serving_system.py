@@ -240,9 +240,7 @@ def test_set_session_valid(
     system, session_config = example_valid_session_setup
     request = system.requests[session_config.request_id]
     server = system.servers[session_config.server_id]
-    expected_model = system.find_min_accuracy_model(
-        request.min_accuracy, server.models_served
-    )
+    expected_model = system.find_min_accuracy_model(server.models_served)
     model_id = session_config.model_id
 
     # Test
@@ -304,9 +302,7 @@ def test_set_session_request_to_min_model(
     system, session_config = example_valid_session_setup
     request = system.requests[session_config.request_id]
     server = system.servers[session_config.server_id]
-    expected_model = system.find_min_accuracy_model(
-        request.min_accuracy, server.models_served
-    )
+    expected_model = system.find_min_accuracy_model(server.models_served)
 
     # Test
     assert request.id not in server.request_to_min_model
@@ -687,10 +683,7 @@ def test_update_additional_fps(
     system, session_config = example_valid_session_setup
     server = system.servers[session_config.server_id]
     model_id = session_config.model_id
-    request = system.requests[session_config.request_id]
-    min_model = system.find_min_accuracy_model(
-        request.min_accuracy, server.models_served
-    )
+    min_model = system.find_min_accuracy_model(server.models_served)
 
     # Test
     system.update_additional_fps(server)
@@ -714,19 +707,20 @@ def test_update_additional_fps(
     )
 
 
-@pytest.mark.parametrize(
-    "min_acc, models, expected",
-    [
-        (0.0, ["mobilenet", "efficientd0", "efficientd1"], "mobilenet"),
-        (0.35, ["mobilenet", "efficientd0", "efficientd1"], "efficientd1"),
-        (0.50, ["mobilenet", "efficientd0", "efficientd1"], None),
-    ],
-)
 def test_find_min_accuracy_model(
-    example_system: ServingSystem, min_acc: float, models: List[str], expected: str
+    example_system: ServingSystem
 ):
+    # Setup
+    model_low = Model(accuracy=0.5, id="low")
+    model_mid = Model(accuracy=0.7, id="mid")
+    model_high = Model(accuracy=0.9, id="high")
+    server = Server(models_served=["mid", "high"])
+    assert example_system.add_model(model_low)
+    assert example_system.add_model(model_mid)
+    assert example_system.add_model(model_high)
+
     # Test
-    assert example_system.find_min_accuracy_model(min_acc, models) == expected
+    assert example_system.find_min_accuracy_model(server.models_served) == "mid"
 
 
 def test_max_fps_at_minimum(
@@ -736,9 +730,7 @@ def test_max_fps_at_minimum(
     system, session_config = example_valid_session_setup
     server = system.servers[session_config.server_id]
     request = system.requests[session_config.request_id]
-    min_model = system.find_min_accuracy_model(
-        request.min_accuracy, server.models_served
-    )
+    min_model = system.find_min_accuracy_model(server.models_served)
     max_thru = server.profiling_data[min_model].max_throughput
 
     # Test
