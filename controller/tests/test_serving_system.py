@@ -1,9 +1,9 @@
 """Unit tests for ServingSystem."""
 import copy
-from typing import List, Tuple
+from typing import Tuple
 
 import pytest
-from controller.cost_calculator import LESumOfSquaresCost
+from controller.reward_calculator import AReward
 from controller.serving_dataclasses import (
     Model,
     ModelProfilingData,
@@ -126,7 +126,7 @@ def example_system() -> ServingSystem:
         ),
     ]
     return ServingSystem(
-        cost_calc=LESumOfSquaresCost(latency_weight=0.5), models=models, servers=servers
+        reward_calc=AReward(), models=models, servers=servers
     )
 
 
@@ -560,8 +560,8 @@ def test_metrics_1_request(
         + server.serving_latency[model_id]
     )
     assert metrics.latency == expected_latency
-    expected_cost = system.cost_calc.session_cost(metrics)
-    assert metrics.cost == expected_cost
+    expected_reward = system.reward_calc.session_reward(metrics)
+    assert metrics.reward == expected_reward
 
 
 # JSON TESTS
@@ -569,7 +569,7 @@ def test_json(example_valid_session_setup: Tuple[ServingSystem, SessionConfigura
     # Setup
     system, session_config = example_valid_session_setup
     assert system.set_session(session_config)
-    system2 = ServingSystem(cost_calc=LESumOfSquaresCost(latency_weight=0.5))
+    system2 = ServingSystem(reward_calc=AReward())
 
     # Test
     json_dict = system.json()

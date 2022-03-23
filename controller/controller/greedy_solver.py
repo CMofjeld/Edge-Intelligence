@@ -308,7 +308,7 @@ class GreedyOfflineAlgorithm(ServingSolver):
 
         # Assign routes one-by-one
         for request in sorted_requests:
-            # Find the configuration that yields the best cost for this request
+            # Find the configuration that yields the best utility for this request
             best_config = self._online_algo.best_config(request, serving_system)
             if best_config:
                 if not serving_system.set_session(best_config) and self._adjuster:
@@ -359,7 +359,7 @@ class GreedyOfflineAlgorithm2(ServingSolver):
 
         # Assign routes one-by-one
         for request in sorted_requests:
-            # Find the configuration that yields the best cost for this request
+            # Find the configuration that yields the best utility for this request
             best_config = self._online_algo1.best_config(request, serving_system)
             if best_config:
                 assert serving_system.set_session(best_config)

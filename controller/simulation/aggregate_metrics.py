@@ -1,7 +1,6 @@
 import argparse
 import os
 import csv
-import itertools
 from typing import Dict
 
 import numpy as np
@@ -61,14 +60,15 @@ def calculate_aggregates(metrics: Dict) -> Dict:
         for solver_metrics in metrics.values()
     ]
     mask = np.ones_like(requests_served_arrays[0], dtype=bool)
-    for arr1, arr2 in itertools.combinations(requests_served_arrays, 2):
-        mask &= arr1 == arr2
+    # for arr1, arr2 in itertools.combinations(requests_served_arrays, 2):
+    #     mask &= arr1 == arr2
 
     aggregates = dict()
     for solver_name, solver_metrics in metrics.items():
         aggregates[solver_name] = {
             "total_requests": np.mean(solver_metrics["total_requests"]),
-            "cost_mean": np.mean(np.asarray(solver_metrics["cost_mean"])[mask]),
+            "total_reward": np.mean(np.asarray(solver_metrics["total_reward"])),
+            "reward_mean": np.mean(np.asarray(solver_metrics["reward_mean"])[mask]),
             "lat_mean": np.mean(np.asarray(solver_metrics["lat_mean"])[mask]),
             "acc_mean": np.mean(np.asarray(solver_metrics["acc_mean"])[mask]),
             "requests_served": (
@@ -112,8 +112,8 @@ def plot_aggregates(all_aggregates: Dict) -> None:
     fig.tight_layout(pad=1.5)
     axes = axes.ravel()
     fig.delaxes(axes[-1])
-    cost_plot, lat_plot, acc_plot, served_plot, time_plot = axes[:-1]
-    cost_plot.set(xlabel="# requests", ylabel="cost", title="Cost")
+    reward_plot, lat_plot, acc_plot, served_plot, time_plot = axes[:-1]
+    reward_plot.set(xlabel="# requests", ylabel="reward", title="reward")
     lat_plot.set(xlabel="# requests", ylabel="seconds", title="Latency")
     acc_plot.set(xlabel="# requests", ylabel="accuracy", title="Accuracy")
     served_plot.set(xlabel="# requests", ylabel="percent", title="Requests Served")
@@ -122,8 +122,8 @@ def plot_aggregates(all_aggregates: Dict) -> None:
 
     # Plot data
     for solver_name, solver_aggs in all_aggregates.items():
-        # Cost
-        cost_plot.plot(solver_aggs["total_requests"], solver_aggs["cost_mean"], label=solver_name)
+        # Reward
+        reward_plot.plot(solver_aggs["total_requests"], solver_aggs["total_reward"], label=solver_name)
         # Latency
         lat_plot.plot(solver_aggs["total_requests"], solver_aggs["lat_mean"], label=solver_name)
         # Accuracy
@@ -134,7 +134,7 @@ def plot_aggregates(all_aggregates: Dict) -> None:
         time_plot.plot(solver_aggs["total_requests"], solver_aggs["runtime"], label=solver_name)
 
     for axis in axes:
-        axis.legend(loc="upper right")
+        axis.legend(loc="upper left")
     plt.show()
 
 

@@ -1,6 +1,6 @@
 """Unit tests for RequestSorter subclasses."""
 import pytest
-from controller.cost_calculator import ESquaredCost
+from controller.reward_calculator import AReward
 from controller.request_sorter import NRRequestSorter
 from controller.serving_dataclasses import (
     Model,
@@ -78,7 +78,7 @@ def example_system() -> ServingSystem:
             },
         ),
     ]
-    return ServingSystem(cost_calc=ESquaredCost(), models=models, servers=servers)
+    return ServingSystem(reward_calc=AReward(), models=models, servers=servers)
 
 
 # TESTS

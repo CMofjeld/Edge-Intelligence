@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 import sortedcollections
 
-from controller.cost_calculator import CostCalculator
+from controller.reward_calculator import RewardCalculator
 from controller.serving_dataclasses import (
     Model,
     ModelProfilingData,
@@ -22,7 +22,7 @@ class ServingSystem:
 
     def __init__(
         self,
-        cost_calc: CostCalculator,
+        reward_calc: RewardCalculator,
         requests: List[SessionRequest] = None,
         models: List[Model] = None,
         servers: List[Server] = None,
@@ -30,13 +30,13 @@ class ServingSystem:
         """Initialize the system's table of requests, models, and servers.
 
         Args:
-            cost_calc (CostCalculator): algorithm to calculate per-session cost
+            reward_calc (RewardCalculator): algorithm to calculate per-session reward
             requests (List[SessionRequest]): list of session requests
             models (List[Model]): list of deep learning models
             servers (List[Server]): list of worker servers
         """
-        # Store cost algorithm
-        self.cost_calc = cost_calc
+        # Store reward algorithm
+        self.reward_calc = reward_calc
         # Map the objects to their IDs
         self.requests = {}
         if requests:
@@ -157,8 +157,8 @@ class ServingSystem:
         # Update latency
         metrics.latency = self.estimate_session_latency(session)
 
-        # Update cost
-        metrics.cost = self.cost_calc.session_cost(metrics)
+        # Update reward
+        metrics.reward = self.reward_calc.session_reward(metrics)
 
     def estimate_session_latency(self, session_config: SessionConfiguration) -> float:
         """Estimate the end-to-end latency for a given session."""

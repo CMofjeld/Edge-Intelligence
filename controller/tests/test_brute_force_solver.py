@@ -1,7 +1,7 @@
 """Unit tests for BruteForceSolver."""
 import pytest
 from controller.brute_force_solver import BruteForceSolver2
-from controller.cost_calculator import ESquaredCost
+from controller.reward_calculator import AReward
 from controller.serving_dataclasses import (
     Model,
     ModelProfilingData,
@@ -88,7 +88,7 @@ def example_system() -> ServingSystem:
             id="agx1",
         ),
     ]
-    return ServingSystem(cost_calc=ESquaredCost(), models=models, servers=servers)
+    return ServingSystem(reward_calc=AReward(), models=models, servers=servers)
 
 
 # UTIL TESTS

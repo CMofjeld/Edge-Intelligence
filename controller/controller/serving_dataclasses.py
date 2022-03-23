@@ -103,4 +103,4 @@ class SessionMetrics:
 
     accuracy: float = None # accuracy score of the assigned model
     latency: float = None # expected E2E latency for the request
-    cost: float = None # individual cost score for the request
+    reward: float = None # individual reward score for the request

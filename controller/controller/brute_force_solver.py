@@ -9,16 +9,9 @@ from controller.serving_dataclasses import SessionConfiguration
 from controller.solver_base_class import ServingSolver
 
 
-def sum_squared_latency_and_error(serving_system: ServingSystem) -> float:
-    """Return the sum of the squared latencies and error rates of all requests."""
-    return sum(
-        metric.latency ** 2 + (1 - metric.accuracy) ** 2
-        for metric in serving_system.metrics.values()
-    )
-
-def total_cost(serving_system: ServingSystem) -> float:
-    """Return the sum of the cost for all sessions."""
-    return sum(metric.cost for metric in serving_system.metrics.values())
+def total_reward(serving_system: ServingSystem) -> float:
+    """Return the sum of the reward for all sessions."""
+    return sum(metric.reward for metric in serving_system.metrics.values())
 
 
 class BruteForceSolver(ServingSolver):
@@ -28,11 +21,11 @@ class BruteForceSolver(ServingSolver):
         self,
         evaluate_solution: Callable[
             [ServingSystem], float
-        ] = total_cost,
+        ] = total_reward,
     ) -> None:
         """Store function passed in for evaluating solutions and set default values for instance variables.
 
-        The function should take in a ServingSystem object and return a single float representing its cost.
+        The function should take in a ServingSystem object and return a single float representing its reward.
 
         Args:
             evaluate_solution (Callable[[ServingSystem], float]): function that picks out the metric to optimize for
@@ -215,7 +208,7 @@ class BruteForceSolver2(ServingSolver):
                 remaining_requests.append(cur_request)
                 return best_sessions, best_score
             else:
-                score = sum([self.serving_system.metrics[id].accuracy for id in request_ids])
+                score = sum([self.serving_system.metrics[id].reward for id in request_ids])
                 sessions = {id: self.serving_system.sessions[id] for id in request_ids}
                 return sessions, score
         sessions, score = solve_server_r(requests)
