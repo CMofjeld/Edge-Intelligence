@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 import sortedcollections
 
-from controller.reward_calculator import RewardCalculator
+from controller.reward_calculator import RewardCalculator, AReward
 from controller.serving_dataclasses import (
     Model,
     ModelProfilingData,
@@ -22,7 +22,7 @@ class ServingSystem:
 
     def __init__(
         self,
-        reward_calc: RewardCalculator,
+        reward_calc: RewardCalculator = None,
         requests: List[SessionRequest] = None,
         models: List[Model] = None,
         servers: List[Server] = None,
@@ -36,7 +36,7 @@ class ServingSystem:
             servers (List[Server]): list of worker servers
         """
         # Store reward algorithm
-        self.reward_calc = reward_calc
+        self.reward_calc = reward_calc if reward_calc else AReward()
         # Map the objects to their IDs
         self.requests = {}
         if requests:
