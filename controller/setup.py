@@ -5,9 +5,14 @@ setup(
     version='0.1.0',
     packages=find_packages(exclude=['tests*']),
     install_requires=[
-        'pyzmq',
+        'fastapi',
+        'httpx',
         'numpy',
         'matplotlib',
-        'sortedcollections'
+        'pytest',
+        'pytest-asyncio',
+        'pytest-httpx',
+        'sortedcollections',
+        'trio'
     ]
 )
