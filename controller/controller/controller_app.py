@@ -1,164 +1,197 @@
-"""Class encapsulating logic for controller process."""
+"""Class encapsulating logic for controller operations."""
+import asyncio
+import datetime
 import json
-import logging
-from typing import Dict
 import uuid
-import zmq
+from typing import List, Optional
 
-from controller.cost_calculator import CostCalculator
-from controller.greedy_solver import GreedyOnlineAlgorithm, GreedyOfflineAlgorithm
+import httpx
+from controller import serving_dataclasses
+from controller.greedy_solver import (
+    GreedyOfflineAlgorithm2,
+    GreedyOnlineAlgorithm,
+    IterativePromoter,
+    PlacementAlgorithm,
+    ServerSessionAdjuster,
+)
+from controller.request_sorter import NRRequestSorter
 from controller.serving_system import ServingSystem
-from controller.serving_dataclasses import SessionRequest, SessionConfiguration
+
+from controller import schemas
 
 
 class ControllerApp:
     def __init__(
         self,
-        ses_req_port: str,
-        sub_req_port: str,
-        client_up_port: str,
-        config_up_port: str,
-        cost_calc: CostCalculator,
-        serv_sys_path: str,
-        online_algo: GreedyOnlineAlgorithm,
-        offline_algo: GreedyOfflineAlgorithm,
-        offline_interval: float,
+        serving_system: ServingSystem,
+        http_client: httpx.AsyncClient,
+        online_algo1: GreedyOnlineAlgorithm = None,
+        online_algo2: GreedyOnlineAlgorithm = None,
+        offline_algo: GreedyOfflineAlgorithm2 = None,
+        adjuster: ServerSessionAdjuster = None,
     ) -> None:
         """Perform initial setup required before starting control loop.
 
         Args:
-            ses_req_port (str): port to listen for session requests on
-            sub_req_port (str): port to listen for subscription confirmations on
-            client_up_port (str): port to listen for client updates on
-            config_up_port (str): port to publish configuration updates on
-            serv_sys_path (str): path to JSON file describing serving system state
-            cost_calc (CostCalculator): algorithm to calculate cost for requests
-            online_algo (GreedyOnlineAlgorithm): algorithm to place new requests
+            serving_system (ServingSystem): model of the system state
+            http_client (httpx.AsyncClient): client to communicate with worker agents
+            online_algo1 (GreedyOnlineAlgorithm): algorithm to place new requests
+            online_algo2 (GreedyOnlineAlgorithm): backup algorithm to place requests if online_algo1 fails
             offline_algo (GreedyOfflineAlgorithm): algorithm to optimize all sessions
-            offline_interval (float): interval at which to run offline algorithm
+            adjuster (ServerSessionAdjuster): algorithm to optimize sessions on a given server
         """
-        # Set up sockets
-        logging.info("Connecting to 0MQ sockets...")
-        self.context = zmq.Context()
+        # Store system model
+        self.serving_system = serving_system
 
-        self.session_requests = self.context.socket(zmq.REP)
-        self.session_requests.bind(f"tcp://*:{ses_req_port}")
-
-        self.subscription_requests = self.context.socket(zmq.REP)
-        self.subscription_requests.bind(f"tcp://*:{sub_req_port}")
-
-        self.client_updates = self.context.socket(zmq.PULL)
-        self.client_updates.bind(f"tcp://*:{client_up_port}")
-
-        self.config_updates = self.context.socket(zmq.PUB)
-        self.config_updates.bind(f"tcp://*:{config_up_port}")
-        logging.info("Connected.")
-
-        # Load serving system from file
-        logging.info("Loading serving system model...")
-        self.serving_system = ServingSystem(cost_calc=cost_calc)
-        with open(serv_sys_path, "r") as json_file:
-            json_dict = json.loads(json_file.read())
-            self.serving_system.load_from_json(json_dict)
-        logging.info("System model loaded.")
+        # Store client
+        self.http_client = http_client
 
         # Store algorithms
-        self.online_algo = online_algo
-        self.offline_algo = offline_algo
-        self.offline_interval = offline_interval
-
-    def start_serving(self):
-        """Begin main control loop for controller."""
-        # Set up poller to listen to sockets
-        poller = zmq.Poller()
-        poller.register(self.session_requests, zmq.POLLIN)
-        poller.register(self.subscription_requests, zmq.POLLIN)
-        poller.register(self.client_updates, zmq.POLLIN)
-
-        # Serve forever
-        logging.info("Main control loop started.")
-        while True:
-            try:
-                socks = dict(poller.poll())
-            except KeyboardInterrupt:
-                logging.info("Received keyboard interrupt. Breaking from control loop.")
-                break
-
-            if self.session_requests in socks:
-                self.handle_new_request()
-
-        # Clean up
-        logging.info("Cleaning up resources...")
-        self.clean_up()
-        logging.info("Done cleaning up.")
-
-    def handle_new_request(self):
-        """Handle a new session request.
-
-        Reads a message from the session request socke and runs the
-        """
-        # Receive/parse message
-        req_dict = self.session_requests.recv_json()
-        request = SessionRequest(**req_dict)
-
-        # Assign ID to new request
-        new_id = self.get_request_id()
-        request.id = new_id
-        self.serving_system.add_request(request)
-        logging.debug(f"Request: {request}")
-
-        # Use online algorithm to route new request
-        new_config = self.online_algo.best_config(request, self.serving_system)
-        logging.debug(f"Config: {new_config}")
-        if new_config:  # successfully placed request
-            # Record request in table
-            new_config.request_id = new_id
-
-            # Record new session configuration
-            self.serving_system.set_session(new_config)
-
-            # Send success indicator and initial configuration to client
-            server_id, model_id = new_config.server_id, new_config.model_id
-            resp_dict = {
-                "status": "success",
-                "id": new_id,
-                "config": self.construct_config_update(server_id, model_id),
-            }
-            self.session_requests.send_json(resp_dict)
-        else:  # could not place request
-            # Remove request from table
-            self.serving_system.remove_request(new_id)
-
-            # Send failure indicator to client
-            self.session_requests.send_json(
-                {"status": "failure", "reason": "could not satisfy request"}
+        self.online_algo1 = (
+            online_algo1
+            if online_algo1
+            else PlacementAlgorithm(
+                acc_ascending=False, fps_ascending=True, minimum=False
             )
+        )
+        self.online_algo2 = (
+            online_algo2
+            if online_algo2
+            else PlacementAlgorithm(
+                acc_ascending=False, fps_ascending=True, minimum=True
+            )
+        )
+        self.adjuster = adjuster if adjuster else IterativePromoter()
+        self.offline_algo = (
+            offline_algo
+            if offline_algo
+            else GreedyOfflineAlgorithm2(
+                request_sorter=NRRequestSorter(),
+                online_algo1=self.online_algo1,
+                online_algo2=self.online_algo2,
+                adjuster=self.adjuster,
+            )
+        )
 
-    def construct_config_update(self, server_id: str, model_id: str) -> Dict:
-        """Construct a JSON dict for a configuration update to send to a client.
+    async def place_request(
+        self, request: schemas.SessionRequest
+    ) -> Optional[schemas.ConfigurationUpdate]:
+        """Place a new request, if feasible, and return its configuration.
+
+        self.online_algo1 is run to find a configuration that can satisfy
+        the request without requiring any existing sessions' configurations to change.
+        If successful, the request's initial configuration will be stored in the system
+        model and a response object containing the configuration is returned.
+
+        If no such configuration can be found, self.online_algo2 is run to find a
+        configuration while allowing other configurations to change as well.
+        If successful, updated configurations for impacted sessions will be sent
+        to the target server before returning the request's initial configuration.
+
+        If the second online algorithm fails to find a valid configuration, None
+        is returned, indicating that the request has been rejected.
 
         Args:
-            server_id (str): ID of the server the client will be routed to
-            model_id (str): ID of the model the client will be served with
+            request (schemas.SessionRequest): request to place
 
         Returns:
-            Dict: JSON dict for the configuration update
+            Optional[schemas.ConfigurationUpdate]: if successful, the request's initial configuration and ID
         """
-        config_dict = {
-            "url": self.serving_system.servers[server_id].url,
-            "model": model_id,
-            "dims": self.serving_system.models[model_id].dims,
-        }
-        return config_dict
+        # Convert api request to internal format and add to serving system
+        serving_request = self.api_request_to_serving_request(request)
+        self.serving_system.add_request(serving_request)
 
-    def get_request_id(self) -> str:
+        # Try online algorithm 1
+        serving_config = self.online_algo1.best_config(
+            request=serving_request, serving_system=self.serving_system
+        )
+        if serving_config:
+            self.serving_system.set_session(serving_config)
+            return self.serving_config_to_config_update(serving_config)
+
+        # Try online algorithm 2
+        serving_config = self.online_algo2.best_config(
+            request=serving_request, serving_system=self.serving_system
+        )
+        if serving_config:
+            # Need to adjust configs for other sessions on the server
+            server = self.serving_system.servers[serving_config.server_id]
+            self.adjuster.adjust_sessions(
+                server=server,
+                serving_system=self.serving_system,
+                additional_request=serving_request,
+            )
+            new_configs = [
+                self.serving_config_to_config_update(
+                    self.serving_system.sessions[request_id]
+                )
+                for request_id in server.requests_served
+                if request_id != serving_request.id
+            ]
+            await self.broadcast_configuration_updates(new_configs)
+            return self.serving_config_to_config_update(
+                self.serving_system.sessions[serving_request.id]
+            )
+
+        # Both online algorithms failed
+        self.serving_system.remove_request(serving_request.id)
+        return None
+
+    async def broadcast_configuration_updates(
+        self, new_configs: List[schemas.ConfigurationUpdate]
+    ) -> None:
+        """Broadcast updated configurations for the given requests to their current servers.
+
+        Args:
+            new_configs (List[schemas.ConfigurationUpdate]): new configurations to broadcast
+        """
+
+        async def broadcast_single_update(
+            config_update: schemas.ConfigurationUpdate,
+        ) -> None:
+            await self.http_client.post(
+                url=config_update.session_config.url, json=config_update.dict()
+            )
+
+        await asyncio.gather(
+            *[broadcast_single_update(config_update) for config_update in new_configs]
+        )
+
+    def api_request_to_serving_request(
+        self, request: schemas.SessionRequest
+    ) -> serving_dataclasses.SessionRequest:
+        """Convert the session request received from the API to the internal format."""
+        tx_speed = self.estimate_tx_speed(request)
+        id = self.new_request_id()
+        session_request = serving_dataclasses.SessionRequest(
+            arrival_rate=request.arrival_rate,
+            max_latency=request.max_latency,
+            transmission_speed=tx_speed,
+            id=id,
+        )
+        return session_request
+
+    def serving_config_to_config_update(
+        self, config: serving_dataclasses.SessionConfiguration
+    ) -> schemas.ConfigurationUpdate:
+        """Convert an internal representation of a session configuration to the API format."""
+        url = self.serving_system.servers[config.server_id].url
+        model_id = config.model_id
+        dims = self.serving_system.models[model_id].dims
+        config_update = schemas.ConfigurationUpdate(
+            request_id=config.request_id,
+            session_config=schemas.SessionConfiguration(
+                url=url, model_id=model_id, dims=dims
+            ),
+        )
+        return config_update
+
+    def estimate_tx_speed(self, request: schemas.SessionRequest) -> float:
+        """Return an estimate of transmission speed for a given request."""
+        tx_time = (datetime.datetime.now() - request.sent_at).total_seconds() + 1e-10
+        msg_size = len(json.dumps(request.json()).encode("utf8"))
+        return msg_size / tx_time
+
+    def new_request_id(self) -> str:
         """Return a unique request ID."""
         return str(uuid.uuid4())
-
-    def clean_up(self):
-        """Clean up resources used by the Controller."""
-        self.session_requests.close()
-        self.subscription_requests.close()
-        self.client_updates.close()
-        self.config_updates.close()
-        self.context.term()

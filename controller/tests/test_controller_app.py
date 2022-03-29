@@ -5,8 +5,8 @@ from typing import Tuple
 
 import httpx
 import pytest
-from api import schemas
-from api.controller_app import ControllerApp
+from controller import schemas
+from controller.controller_app import ControllerApp
 from controller import serving_dataclasses
 from controller.serving_system import ServingSystem
 
