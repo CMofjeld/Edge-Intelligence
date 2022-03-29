@@ -4,7 +4,7 @@ import os
 
 import fastapi
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from controller import controller_app, schemas, serving_system
@@ -58,3 +58,11 @@ async def create_session(
         return config_update
     else:
         raise HTTPException(status_code=412, detail="Unable to satisfy request")
+
+
+@app.delete("/sessions/{request_id}", response_class=Response, status_code=204)
+async def close_session(request_id: str) -> None:
+    if not app.state.controller_app.close_session(request_id):
+        raise HTTPException(
+            status_code=404, detail="No session found for that request ID"
+        )

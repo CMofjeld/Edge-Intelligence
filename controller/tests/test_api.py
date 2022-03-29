@@ -101,3 +101,36 @@ def test_create_session_invalid(
     # TEST
     response = test_app.post("/sessions", data=api_request.json())
     assert response.status_code == 412
+
+
+def test_close_session_valid(
+    test_app: TestClient,
+    sample_valid_placement_setup: Tuple[
+        ControllerApp,
+        serving_dataclasses.Server,
+        serving_dataclasses.Model,
+        schemas.SessionRequest,
+    ],
+):
+    # SETUP
+    sample_controller_app, _, _, api_request = sample_valid_placement_setup
+    app.state.controller_app = sample_controller_app
+    response = test_app.post("/sessions", data=api_request.json())
+    assert response.status_code == 201
+    config_update = schemas.ConfigurationUpdate(**response.json())
+    request_id = config_update.request_id
+
+    # TEST
+    response = test_app.delete(f"/sessions/{request_id}")
+    assert response.status_code == 204
+
+
+def test_close_session_invalid(
+    test_app: TestClient, sample_serving_system: ServingSystem
+):
+    # SETUP
+    app.state.controller_app.serving_system = sample_serving_system
+
+    # TEST
+    response = test_app.delete(f"/sessions/invalid_id")
+    assert response.status_code == 404
