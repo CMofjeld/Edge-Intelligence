@@ -6,6 +6,7 @@ setup(
     packages=find_packages(exclude=['tests*']),
     install_requires=[
         'fastapi',
+        'fastapi-utils',
         'httpx',
         'numpy',
         'matplotlib',

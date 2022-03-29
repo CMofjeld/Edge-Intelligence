@@ -6,6 +6,7 @@ import fastapi
 import httpx
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_utils.tasks import repeat_every
 
 from controller import controller_app, schemas, serving_system
 
@@ -30,6 +31,7 @@ def get_http_client() -> httpx.AsyncClient:
 
 
 def app_factory() -> fastapi.FastAPI:
+    """Instantiate FastAPI app."""
     app = FastAPI()
     app.add_middleware(
         CORSMiddleware,
@@ -46,6 +48,17 @@ def app_factory() -> fastapi.FastAPI:
 
 
 app = app_factory()
+
+
+@app.on_event("startup")
+@repeat_every(seconds=OFFLINE_INTERVAL, wait_first=True)
+async def optimize_sessions():
+    await app.state.controller_app.optimize_sessions()
+
+
+@app.on_event("shutdown")
+async def close_http_client():
+    await app.state.client.aclose()
 
 
 # Routes
