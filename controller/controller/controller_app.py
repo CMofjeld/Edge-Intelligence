@@ -1,12 +1,14 @@
 """Class encapsulating logic for controller operations."""
 import asyncio
+import copy
 import datetime
 import json
 import uuid
 from typing import List, Optional
 
 import httpx
-from controller import serving_dataclasses
+
+from controller import schemas, serving_dataclasses
 from controller.greedy_solver import (
     GreedyOfflineAlgorithm2,
     GreedyOnlineAlgorithm,
@@ -16,8 +18,6 @@ from controller.greedy_solver import (
 )
 from controller.request_sorter import NRRequestSorter
 from controller.serving_system import ServingSystem
-
-from controller import schemas
 
 
 class ControllerApp:
@@ -72,6 +72,8 @@ class ControllerApp:
                 adjuster=self.adjuster,
             )
         )
+
+    # SESSION MANAGEMENT METHODS
 
     async def place_request(
         self, request: schemas.SessionRequest
@@ -153,6 +155,28 @@ class ControllerApp:
             bool: True if the request had an active session
         """
         return self.serving_system.remove_request(request_id)
+
+    async def optimize_sessions(self) -> None:
+        """Run the offline algorithm in order to optimize configurations for active sessions.
+
+        Any configurations that change will be broadcast to the appropriate servers.
+        """
+        # Run the offline algorithm
+        new_configs = self.offline_algo.solve(copy.deepcopy(self.serving_system))
+        if len(new_configs) < len(self.serving_system.requests):
+            # Didn't find a configuration for every request
+            return
+
+        # Identify configurations that changed
+        to_broadast = []
+        for request_id, config in new_configs.items():
+            if config != self.serving_system.sessions[request_id]:
+                to_broadast.append(self.serving_config_to_config_update(config))
+
+        # Broadcast updates
+        await self.broadcast_configuration_updates(to_broadast)
+
+    # UTILITY METHODS
 
     async def broadcast_configuration_updates(
         self, new_configs: List[schemas.ConfigurationUpdate]

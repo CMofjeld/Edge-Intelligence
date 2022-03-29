@@ -5,9 +5,8 @@ from typing import Tuple
 
 import httpx
 import pytest
-from controller import schemas
+from controller import schemas, serving_dataclasses
 from controller.controller_app import ControllerApp
-from controller import serving_dataclasses
 from controller.serving_system import ServingSystem
 
 
@@ -217,12 +216,14 @@ async def test_place_request_2_invalid(
 
 
 @pytest.mark.asyncio
-async def test_close_session_valid(sample_valid_placement_setup: Tuple[
+async def test_close_session_valid(
+    sample_valid_placement_setup: Tuple[
         ControllerApp,
         serving_dataclasses.Server,
         serving_dataclasses.Model,
         schemas.SessionRequest,
-    ]):
+    ]
+):
     # Setup
     sample_app, _, _, api_request = sample_valid_placement_setup
     response = await sample_app.place_request(api_request)
@@ -236,12 +237,14 @@ async def test_close_session_valid(sample_valid_placement_setup: Tuple[
 
 
 @pytest.mark.asyncio
-async def test_close_session_invalid(sample_valid_placement_setup: Tuple[
+async def test_close_session_invalid(
+    sample_valid_placement_setup: Tuple[
         ControllerApp,
         serving_dataclasses.Server,
         serving_dataclasses.Model,
         schemas.SessionRequest,
-    ]):
+    ]
+):
     # Setup
     sample_app, _, _, api_request = sample_valid_placement_setup
     response = await sample_app.place_request(api_request)
@@ -252,6 +255,59 @@ async def test_close_session_invalid(sample_valid_placement_setup: Tuple[
     assert not sample_app.close_session("invalid_id")
     assert request_id in sample_app.serving_system.requests
     assert request_id in sample_app.serving_system.sessions
+
+
+@pytest.mark.asyncio
+async def test_optimize_sessions(
+    sample_valid_placement_setup_2_requests: Tuple[
+        ControllerApp,
+        serving_dataclasses.Server,
+        serving_dataclasses.Model,
+        serving_dataclasses.Model,
+        schemas.SessionRequest,
+        schemas.SessionRequest,
+    ],
+    httpx_mock,
+):
+    # Setup
+    httpx_mock.add_response(method="POST")
+    (
+        sample_app,
+        server,
+        model1,
+        model2,
+        request1,
+        request2,
+    ) = sample_valid_placement_setup_2_requests
+    config1 = await sample_app.place_request(request1)
+    request1_id = config1.request_id
+    assert await sample_app.place_request(request2) is not None
+    expected_update1 = schemas.ConfigurationUpdate(
+        request_id="",
+        session_config=schemas.SessionConfiguration(
+            url=server.url, model_id=model1.id, dims=model1.dims
+        ),
+    )
+    expected_update2 = schemas.ConfigurationUpdate(
+        request_id="",
+        session_config=schemas.SessionConfiguration(
+            url=server.url, model_id=model2.id, dims=model2.dims
+        ),
+    )
+    broadcast_request = httpx_mock.get_requests()[0]
+    assert broadcast_request.url == server.url
+    update1_json = json.loads(broadcast_request.content)
+    update1 = schemas.ConfigurationUpdate(**update1_json)
+    assert update1.session_config == expected_update1.session_config
+
+    # Test
+    assert sample_app.close_session(request1_id)
+    await sample_app.optimize_sessions()
+    broadcast_request = httpx_mock.get_requests()[1]
+    assert broadcast_request.url == server.url
+    update2_json = json.loads(broadcast_request.content)
+    update2 = schemas.ConfigurationUpdate(**update2_json)
+    assert update2.session_config == expected_update2.session_config
 
 
 # UTIL TESTS
