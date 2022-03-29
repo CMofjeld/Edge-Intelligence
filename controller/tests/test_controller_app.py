@@ -96,7 +96,7 @@ def sample_valid_placement_setup_2_requests(
     return sample_app, server, model1, model2, request1, request2
 
 
-# PLACE REQUEST TESTS
+# SESSION TESTS
 @pytest.mark.asyncio
 async def test_place_request_1_valid(
     sample_valid_placement_setup: Tuple[
@@ -214,6 +214,44 @@ async def test_place_request_2_invalid(
     assert (
         request1_config_prev == sample_app.serving_system.sessions[config1.request_id]
     )
+
+
+@pytest.mark.asyncio
+async def test_close_session_valid(sample_valid_placement_setup: Tuple[
+        ControllerApp,
+        serving_dataclasses.Server,
+        serving_dataclasses.Model,
+        schemas.SessionRequest,
+    ]):
+    # Setup
+    sample_app, _, _, api_request = sample_valid_placement_setup
+    response = await sample_app.place_request(api_request)
+    assert response is not None
+    request_id = response.request_id
+
+    # Test
+    assert sample_app.close_session(request_id)
+    assert request_id not in sample_app.serving_system.requests
+    assert request_id not in sample_app.serving_system.sessions
+
+
+@pytest.mark.asyncio
+async def test_close_session_invalid(sample_valid_placement_setup: Tuple[
+        ControllerApp,
+        serving_dataclasses.Server,
+        serving_dataclasses.Model,
+        schemas.SessionRequest,
+    ]):
+    # Setup
+    sample_app, _, _, api_request = sample_valid_placement_setup
+    response = await sample_app.place_request(api_request)
+    assert response is not None
+    request_id = response.request_id
+
+    # Test
+    assert not sample_app.close_session("invalid_id")
+    assert request_id in sample_app.serving_system.requests
+    assert request_id in sample_app.serving_system.sessions
 
 
 # UTIL TESTS

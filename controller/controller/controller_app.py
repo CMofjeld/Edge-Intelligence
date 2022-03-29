@@ -137,6 +137,23 @@ class ControllerApp:
         self.serving_system.remove_request(serving_request.id)
         return None
 
+    def close_session(self, request_id: str) -> bool:
+        """Close the session associated with the given request ID.
+
+        If the request ID has an associated active session, that session
+        is cleared from the system model, as is the record of the request.
+        True is returned to indicate success.
+
+        If no active session was found, False is returned to indicate failure.
+
+        Args:
+            request_id (str): ID of the request associated with the session
+
+        Returns:
+            bool: True if the request had an active session
+        """
+        return self.serving_system.remove_request(request_id)
+
     async def broadcast_configuration_updates(
         self, new_configs: List[schemas.ConfigurationUpdate]
     ) -> None:
