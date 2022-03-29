@@ -1,48 +1,60 @@
-"""Main control loop of Controller process."""
-import logging
+"""API for controller application."""
+import json
 import os
 
-from controller.controller_app import ControllerApp
-from controller.cost_calculator import LESumOfSquaresCost
-from controller.greedy_solver import GreedyOfflineAlgorithm, GreedyOnlineAlgorithm
-from controller.request_sorter import ARRequestSorter
-from controller.session_config_ranker import LCFConfigRanker
+import fastapi
+import httpx
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+from controller import controller_app, schemas, serving_system
 
 # Configuration
-SERV_SYS_PATH = os.environ.get("SERV_SYS_PATH", "system_model.json")
-SES_REQ_PORT = os.environ.get("SES_REQ_PORT", "5555")
-SUB_REQ_PORT = os.environ.get("SUB_REQ_PORT", "5556")
-CLIENT_UP_PORT = os.environ.get("CLIENT_UP_PORT", "5557")
-CONFIG_UP_PORT = os.environ.get("CONFIG_UP_PORT", "5558")
+SERV_SYS_PATH = os.environ.get("SERV_SYS_PATH", None)
 OFFLINE_INTERVAL = float(os.environ.get("OFFLINE_INTERVAL", "60.0"))
-LATENCY_WEIGHT = float(os.environ.get("LATENCY_WEIGHT", "1.0"))
+
+# Setup
+def get_serving_system() -> serving_system.ServingSystem:
+    """Load the serving system."""
+    serv_sys = serving_system.ServingSystem()
+    if SERV_SYS_PATH:
+        with open(SERV_SYS_PATH, "r") as json_file:
+            system_json = json.loads(json_file.read())
+            serv_sys.load_from_json(system_json)
+    return serv_sys
 
 
-def main():
-    """Main control loop of Controller process."""
-    # Setup
-    logging.basicConfig(level=logging.DEBUG)
-    online_algo = GreedyOnlineAlgorithm(config_ranker=LCFConfigRanker())
-    offline_algo = GreedyOfflineAlgorithm(
-        request_sorter=ARRequestSorter(), online_algo=online_algo
+def get_http_client() -> httpx.AsyncClient:
+    """Instantiate HTTP client for use by controller app."""
+    return httpx.AsyncClient()
+
+
+def app_factory() -> fastapi.FastAPI:
+    app = FastAPI()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
-    cost_calc = LESumOfSquaresCost(latency_weight=LATENCY_WEIGHT)
-    main_controller = ControllerApp(
-        ses_req_port=SES_REQ_PORT,
-        sub_req_port=SUB_REQ_PORT,
-        client_up_port=CLIENT_UP_PORT,
-        config_up_port=CONFIG_UP_PORT,
-        serv_sys_path=SERV_SYS_PATH,
-        cost_calc=cost_calc,
-        online_algo=online_algo,
-        offline_algo=offline_algo,
-        offline_interval=OFFLINE_INTERVAL,
+    app.state.client = get_http_client()
+    app.state.controller_app = controller_app.ControllerApp(
+        serving_system=get_serving_system(), http_client=app.state.client
     )
-
-    # Start serving
-    logging.info("Starting")
-    main_controller.start_serving()
+    return app
 
 
-if __name__ == "__main__":
-    main()
+app = app_factory()
+
+
+# Routes
+@app.post("/sessions", response_model=schemas.ConfigurationUpdate, status_code=201)
+async def create_session(
+    session_request: schemas.SessionRequest,
+) -> schemas.ConfigurationUpdate:
+    config_update = await app.state.controller_app.place_request(session_request)
+    if config_update:
+        return config_update
+    else:
+        raise HTTPException(status_code=412, detail="Unable to satisfy request")
