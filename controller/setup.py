@@ -12,6 +12,7 @@ setup(
         'pytest',
         'pytest-asyncio',
         'pytest-httpx',
+        'requests',
         'sortedcollections'
     ]
 )
