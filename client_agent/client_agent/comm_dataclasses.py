@@ -1,6 +1,5 @@
 """Dataclasses defining protocol to use when communicating with the controller."""
 import dataclasses
-import datetime
 from typing import List
 
 
@@ -8,7 +7,7 @@ from typing import List
 class SessionRequest():
     arrival_rate: float
     max_latency: float
-    sent_at: datetime.datetime
+    sent_at: str
 
 
 @dataclasses.dataclass

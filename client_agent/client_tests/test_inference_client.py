@@ -1,15 +1,59 @@
 """Unit tests for InferenceClient."""
-import httpx
-import pytest
+import dataclasses
+import json
 
-from client_agent.comm_dataclasses import ConfigurationUpdate, SessionRequest
+import pytest
+from client_agent.comm_dataclasses import ConfigurationUpdate, SessionConfiguration
 from client_agent.inference_client import InferenceClient
+from pytest_httpx import HTTPXMock
 
 
 # FIXTURES
 @pytest.fixture
 def client():
     return InferenceClient()
+
+
+@pytest.fixture
+def sample_config() -> ConfigurationUpdate:
+    return ConfigurationUpdate(
+        request_id="test_request",
+        session_config=SessionConfiguration(
+            url="https://testurl", model_id="test_model", dims=[24, 24]
+        ),
+    )
+
+
+# SESSION TESTS
+def test_connect_success(
+    client: InferenceClient, sample_config: ConfigurationUpdate, httpx_mock: HTTPXMock
+):
+    # Setup
+    httpx_mock.add_response(status_code=201, json=dataclasses.asdict(sample_config))
+    arrival_rate = 1.0
+    max_latency = 2.0
+
+    # Test
+    assert client.connect(
+        "https://test_url", arrival_rate=arrival_rate, max_latency=max_latency
+    )
+    req_msg = httpx_mock.get_request()
+    assert req_msg is not None
+    req_json = json.loads(req_msg.content)
+    assert req_json["arrival_rate"] == arrival_rate
+    assert req_json["max_latency"] == max_latency
+
+
+def test_connect_failure(client: InferenceClient, httpx_mock: HTTPXMock):
+    # Setup
+    httpx_mock.add_response(status_code=412)
+    arrival_rate = 1.0
+    max_latency = 2.0
+
+    # Test
+    assert not client.connect(
+        "https://test_url", arrival_rate=arrival_rate, max_latency=max_latency
+    )
 
 
 # UTIL TESTS
