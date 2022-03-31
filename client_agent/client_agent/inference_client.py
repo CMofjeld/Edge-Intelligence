@@ -39,7 +39,7 @@ class InferenceClient:
 
         # Submit request
         response = self.client.post(
-            url=controller_url, json=dataclasses.asdict(req_msg)
+            url=f"{controller_url}/sessions", json=dataclasses.asdict(req_msg)
         )
 
         # Parse response
