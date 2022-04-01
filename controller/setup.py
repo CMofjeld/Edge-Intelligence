@@ -14,6 +14,7 @@ setup(
         'pytest-asyncio',
         'pytest-httpx',
         'requests',
-        'sortedcollections'
+        'sortedcollections',
+        'uvicorn'
     ]
 )
