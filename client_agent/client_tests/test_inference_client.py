@@ -56,6 +56,48 @@ def test_connect_failure(client: InferenceClient, httpx_mock: HTTPXMock):
     )
 
 
+def test_close_success(
+    client: InferenceClient, sample_config: ConfigurationUpdate, httpx_mock: HTTPXMock
+):
+    # Setup
+    httpx_mock.add_response(
+        method="POST", status_code=201, json=dataclasses.asdict(sample_config)
+    )
+    arrival_rate = 1.0
+    max_latency = 2.0
+    assert client.connect(
+        "https://test_url", arrival_rate=arrival_rate, max_latency=max_latency
+    )
+
+    # Test
+    httpx_mock.add_response(method="DELETE", status_code=204)
+    assert client.close()
+    assert not client.close()
+
+
+def test_close_no_session(client: InferenceClient):
+    # Test
+    assert not client.close()
+
+
+def test_close_bad_response(
+    client: InferenceClient, sample_config: ConfigurationUpdate, httpx_mock: HTTPXMock
+):
+    # Setup
+    httpx_mock.add_response(
+        method="POST", status_code=201, json=dataclasses.asdict(sample_config)
+    )
+    arrival_rate = 1.0
+    max_latency = 2.0
+    assert client.connect(
+        "https://test_url", arrival_rate=arrival_rate, max_latency=max_latency
+    )
+
+    # Test
+    httpx_mock.add_response(method="DELETE", status_code=404)
+    assert not client.close()
+
+
 # UTIL TESTS
 def test_construct_request_message(client: InferenceClient):
     # Setup
@@ -63,6 +105,6 @@ def test_construct_request_message(client: InferenceClient):
     max_latency = 2.0
 
     # Test
-    session_request = client.construct_request_message(arrival_rate, max_latency)
+    session_request = client._construct_request_message(arrival_rate, max_latency)
     assert session_request.arrival_rate == arrival_rate
     assert session_request.max_latency == max_latency
