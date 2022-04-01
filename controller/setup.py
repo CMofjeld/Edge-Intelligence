@@ -8,8 +8,6 @@ setup(
         'fastapi',
         'fastapi-utils',
         'httpx',
-        'numpy',
-        'matplotlib',
         'pytest',
         'pytest-asyncio',
         'pytest-httpx',
