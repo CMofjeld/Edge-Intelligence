@@ -53,7 +53,7 @@ def infer_req_files(image: bytes) -> Dict:
 
 @pytest.fixture
 def infer_results() -> Dict:
-    return {"results": [1, 2, 3]}
+    return [1, 2, 3]
 
 
 @pytest.fixture

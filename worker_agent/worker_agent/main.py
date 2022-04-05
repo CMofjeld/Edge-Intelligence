@@ -11,11 +11,13 @@ from worker_agent.schemas import (
     SessionConfiguration,
     SpeedResponse,
 )
-from worker_agent.serving_client import TritonImageClient
+from worker_agent.triton_serving_client import TritonImageClient
 from worker_agent.worker_app import WorkerApp
 
 # Configuration
 SERVING_URL = os.environ.get("SERVING_URL", None)
+SERVING_PROTOCOL = os.environ.get("SERVING_PROTOCOL", "http")
+SERVING_SOFTWARE = os.environ.get("SERVING_SOFTWARE", "").lower()
 
 # Setup
 def app_factory() -> FastAPI:
@@ -28,7 +30,10 @@ def app_factory() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    serving_client = TritonImageClient(serving_url=SERVING_URL)
+    if SERVING_SOFTWARE == "triton":
+        serving_client = TritonImageClient(serving_url=SERVING_URL, protocol=SERVING_PROTOCOL)
+    else:
+        serving_client = None
     app.state.worker_app = WorkerApp(serving_client=serving_client)
     return app
 

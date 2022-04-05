@@ -12,7 +12,7 @@ from worker_tests.mock_serving_client import MockServingClient
 # FIXTURES
 @pytest.fixture
 def app() -> WorkerApp:
-    return WorkerApp(serving_client=MockServingClient(response={"results": [1, 2, 3]}))
+    return WorkerApp(serving_client=MockServingClient(response=[1, 2, 3]))
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def predict_args(image, model_id, request_id, sent_at) -> Dict:
 # PREDICT TESTS
 def test_predict(app: WorkerApp, predict_args: Dict):
     # Setup
-    expected_response = {"results": [1, 2, 3]}
+    expected_response = [1, 2, 3]
     app.serving_client.set_response(expected_response)
 
     # Test
