@@ -56,3 +56,18 @@ def infer(
 )
 def store_config_upate(request_id: str, config_update: ConfigurationUpdate):
     app.state.worker_app.store_config_update(request_id, config_update)
+
+
+@app.get(
+    "/sessions/{request_id}/transmission_speed",
+    response_model=SpeedResponse,
+    status_code=200,
+)
+def get_transmission_speed(request_id: str):
+    speed_response = app.state.worker_app.transmission_speed(request_id)
+    if speed_response is not None:
+        return speed_response
+    else:
+        raise HTTPException(
+            status_code=404, detail="Speed not found for that request ID"
+        )

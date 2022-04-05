@@ -119,3 +119,28 @@ def test_store_config_upate(
     assert response.status_code == 200
     predict_response = PredictResponse(**response.json())
     assert predict_response.config_update is None
+
+
+# TRANSMISSION SPEED TESTS
+def test_get_transmission_speed(
+    client: TestClient,
+    model_id: str,
+    infer_req_data: Dict,
+    infer_req_files: Dict,
+    infer_results: Dict,
+):
+    # Setup
+    app.state.worker_app.serving_client = MockServingClient(response=infer_results)
+    request_id = infer_req_data["request_id"]
+
+    # Test
+    response = client.get(f"/sessions/{request_id}/transmission_speed")
+    assert response.status_code == 404
+    response = client.post(
+        f"/models/{model_id}/infer", data=infer_req_data, files=infer_req_files
+    )
+    assert response.status_code == 200
+    response = client.get(f"/sessions/{request_id}/transmission_speed")
+    assert response.status_code == 200
+    speed_response = SpeedResponse(**response.json())
+    assert speed_response.transmission_speed is not None
