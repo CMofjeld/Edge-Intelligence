@@ -131,7 +131,8 @@ def test_get_transmission_speed(
 ):
     # Setup
     app.state.worker_app.serving_client = MockServingClient(response=infer_results)
-    request_id = infer_req_data["request_id"]
+    request_id = "new_id"
+    infer_req_data["request_id"] = request_id
 
     # Test
     response = client.get(f"/sessions/{request_id}/transmission_speed")
