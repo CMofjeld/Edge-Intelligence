@@ -4,7 +4,7 @@ import datetime
 from statistics import mean
 from typing import Dict, Optional, Tuple
 
-from worker_agent.schemas import ConfigurationUpdate, SpeedResponse
+from worker_agent.schemas import ConfigurationUpdate, PredictResponse, SpeedResponse
 from worker_agent.serving_client import ServingClient
 
 
@@ -28,7 +28,7 @@ class WorkerApp:
 
     def predict(
         self, image: bytes, model_id: str, request_id: str, sent_at: datetime.datetime
-    ) -> Tuple[Dict, Optional[ConfigurationUpdate]]:
+    ) -> PredictResponse:
         """Send the given image for inference using the specified model and return the results.
 
         Uses the serving software client to send the image for inference.
@@ -43,15 +43,15 @@ class WorkerApp:
             sent_at (datetime.datetime): when the request was sent from the Client Agent
 
         Returns:
-            Tuple[Dict, Optional[ConfigurationUpdate]]: JSON result returned by serving software
-                and the configuration update for the Client Agent, if there is one pending
+            PredictResponse: JSON result returned by serving software and the configuration update
+                for the Client Agent, if there is one pending
         """
         # Update transmission speed for the request, using size of image data as message size
         cur_speed = self._estimate_tx_speed(len(image), sent_at)
         self.tx_speeds[request_id].append(cur_speed)
 
         # Retrieve the results from the serving client
-        serving_resp = self.serving_client.predict(image, model_id)
+        inference_results = self.serving_client.predict(image, model_id)
 
         # Get any pending updates
         config_update = None
@@ -60,7 +60,7 @@ class WorkerApp:
             del self.config_updates[request_id]
 
         # Return the results
-        return serving_resp, config_update
+        return PredictResponse(inference_results=inference_results, config_update=config_update)
 
     def _estimate_tx_speed(self, msg_size: int, sent_at: datetime.datetime) -> float:
         """Estimate transmission speed based on message size and the time it was sent.

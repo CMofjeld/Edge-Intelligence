@@ -1,5 +1,5 @@
 """Pydantic models for parsing data from and returning data to API requests."""
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from pydantic import BaseModel
 
@@ -20,4 +20,4 @@ class ConfigurationUpdate(BaseModel):
 
 class PredictResponse(BaseModel):
     inference_results: Dict
-    config_update: ConfigurationUpdate
+    config_update: Optional[ConfigurationUpdate]

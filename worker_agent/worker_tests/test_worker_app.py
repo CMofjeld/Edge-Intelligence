@@ -12,7 +12,7 @@ from worker_tests.mock_serving_client import MockServingClient
 # FIXTURES
 @pytest.fixture
 def app() -> WorkerApp:
-    return WorkerApp(serving_client=MockServingClient())
+    return WorkerApp(serving_client=MockServingClient(response={"results": [1,2,3]}))
 
 
 @pytest.fixture
@@ -52,7 +52,8 @@ def test_predict(app: WorkerApp, predict_args: Dict):
     app.serving_client.set_response(expected_response)
 
     # Test
-    response, config_update = app.predict(**predict_args)
+    predict_response = app.predict(**predict_args)
+    response, config_update = predict_response.inference_results, predict_response.config_update
     assert response == expected_response
     assert config_update is None
 
@@ -69,10 +70,10 @@ def test_store_config_update(app: WorkerApp, predict_args: Dict):
 
     # Test
     app.store_config_update(expected_update)
-    _, config_update = app.predict(**predict_args)
-    assert config_update == expected_update
-    _, config_update = app.predict(**predict_args)
-    assert config_update == None
+    predict_response = app.predict(**predict_args)
+    assert predict_response.config_update == expected_update
+    predict_response = app.predict(**predict_args)
+    assert predict_response.config_update == None
 
 
 # TX SPEED TESTS
