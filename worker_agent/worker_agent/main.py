@@ -2,7 +2,7 @@
 import datetime
 import os
 
-from fastapi import FastAPI, File, Form, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from worker_agent.schemas import (
@@ -49,3 +49,10 @@ def infer(
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put(
+    "/sessions/{request_id}/config_update", response_class=Response, status_code=204
+)
+def store_config_upate(request_id: str, config_update: ConfigurationUpdate):
+    app.state.worker_app.store_config_update(request_id, config_update)

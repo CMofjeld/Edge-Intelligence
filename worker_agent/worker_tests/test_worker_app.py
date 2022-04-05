@@ -12,7 +12,7 @@ from worker_tests.mock_serving_client import MockServingClient
 # FIXTURES
 @pytest.fixture
 def app() -> WorkerApp:
-    return WorkerApp(serving_client=MockServingClient(response={"results": [1,2,3]}))
+    return WorkerApp(serving_client=MockServingClient(response={"results": [1, 2, 3]}))
 
 
 @pytest.fixture
@@ -53,7 +53,10 @@ def test_predict(app: WorkerApp, predict_args: Dict):
 
     # Test
     predict_response = app.predict(**predict_args)
-    response, config_update = predict_response.inference_results, predict_response.config_update
+    response, config_update = (
+        predict_response.inference_results,
+        predict_response.config_update,
+    )
     assert response == expected_response
     assert config_update is None
 
@@ -69,7 +72,7 @@ def test_store_config_update(app: WorkerApp, predict_args: Dict):
     )
 
     # Test
-    app.store_config_update(expected_update)
+    app.store_config_update(predict_args["request_id"], expected_update)
     predict_response = app.predict(**predict_args)
     assert predict_response.config_update == expected_update
     predict_response = app.predict(**predict_args)

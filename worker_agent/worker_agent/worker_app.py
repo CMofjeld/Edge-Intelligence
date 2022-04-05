@@ -60,7 +60,9 @@ class WorkerApp:
             del self.config_updates[request_id]
 
         # Return the results
-        return PredictResponse(inference_results=inference_results, config_update=config_update)
+        return PredictResponse(
+            inference_results=inference_results, config_update=config_update
+        )
 
     def _estimate_tx_speed(self, msg_size: int, sent_at: datetime.datetime) -> float:
         """Estimate transmission speed based on message size and the time it was sent.
@@ -75,13 +77,16 @@ class WorkerApp:
         tx_time = (datetime.datetime.now() - sent_at).total_seconds() + 1e-10
         return msg_size / tx_time
 
-    def store_config_update(self, config_update: ConfigurationUpdate) -> None:
+    def store_config_update(
+        self, request_id: str, config_update: ConfigurationUpdate
+    ) -> None:
         """Store the given configuration update so that it may be returned to the target Client Agent.
 
         Args:
+            request_id (str): request ID of the Client Agent
             config_update (ConfigurationUpdate): pending configuration update
         """
-        self.config_updates[config_update.request_id] = config_update
+        self.config_updates[request_id] = config_update
 
     def transmission_speed(self, request_id: str) -> Optional[SpeedResponse]:
         """Return the estimated transmission speed for the Client Agent with the given request ID.

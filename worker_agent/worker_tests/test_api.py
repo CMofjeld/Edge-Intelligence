@@ -56,6 +56,16 @@ def infer_results() -> Dict:
     return {"results": [1, 2, 3]}
 
 
+@pytest.fixture
+def session_config(model_id) -> SessionConfiguration:
+    return SessionConfiguration(url="test_url", model_id=model_id, dims=[1, 2, 3])
+
+
+@pytest.fixture
+def config_update(request_id, session_config) -> ConfigurationUpdate:
+    return ConfigurationUpdate(request_id=request_id, session_config=session_config)
+
+
 # INFER TESTS
 def test_infer(
     client: TestClient,
@@ -77,3 +87,35 @@ def test_infer(
     assert response.status_code == 200
     predict_response = PredictResponse(**response.json())
     assert predict_response == expected_response
+
+
+# CONFIG UPDATE TESTS
+def test_store_config_upate(
+    client: TestClient,
+    model_id: str,
+    infer_req_data: Dict,
+    infer_req_files: Dict,
+    infer_results: Dict,
+    config_update: ConfigurationUpdate,
+):
+    # Setup
+    app.state.worker_app.serving_client = MockServingClient(response=infer_results)
+
+    # Test
+    response = client.put(
+        f"/sessions/{infer_req_data['request_id']}/config_update",
+        data=config_update.json(),
+    )
+    assert response.status_code == 204
+    response = client.post(
+        f"/models/{model_id}/infer", data=infer_req_data, files=infer_req_files
+    )
+    assert response.status_code == 200
+    predict_response = PredictResponse(**response.json())
+    assert predict_response.config_update == config_update
+    response = client.post(
+        f"/models/{model_id}/infer", data=infer_req_data, files=infer_req_files
+    )
+    assert response.status_code == 200
+    predict_response = PredictResponse(**response.json())
+    assert predict_response.config_update is None
