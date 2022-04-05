@@ -22,7 +22,7 @@ class TritonImageClient(ServingClient):
     """Client for performing inference with Triton Inference Server."""
 
     def __init__(self, serving_url: str) -> None:
-        raise NotImplementedError()
+        pass
 
     def predict(self, image: bytes, model_id: str) -> Dict:
         """Send the given image for inference using the specified model and return the results.
