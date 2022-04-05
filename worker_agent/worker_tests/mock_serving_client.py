@@ -1,10 +1,10 @@
-"""Mocker ServingClient class for use in testing."""
+"""Mock ServingClient class for use in testing."""
 from typing import Dict
 
 from worker_agent.serving_client import ServingClient
 
 class MockServingClient(ServingClient):
-    """Mocker ServingClient class for use in testing."""
+    """Mock ServingClient class for use in testing."""
 
     def __init__(self, response: Dict = None) -> None:
         """Initializes the response to use when calling predict.
