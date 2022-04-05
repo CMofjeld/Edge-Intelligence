@@ -11,6 +11,7 @@ setup(
         'pillow',
         'pytest',
         'pytest-httpx',
+        'python-multipart',
         'tritonclient[all]',
         'uvicorn'
     ]
